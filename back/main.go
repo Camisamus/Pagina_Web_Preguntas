@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-
 )
 
 func init() {
@@ -34,18 +34,32 @@ func conectadb() {
 	}
 }
 
+func cerrarSesiones() {
+	for {
+		log.Println("Eliminando Sesiones Antiguas")
+		timenow := time.Now().Add(time.Hour * -2)
+		for key, element := range dbSesiones {
+			if element.TimeStamp.Before(timenow) {
+				delete(dbSesiones, key)
+			}
+		}
+		time.Sleep(time.Hour * 2)
+	}
+}
+
 //____________________________________________________________________________________________
 func main() {
 	r := mux.NewRouter().StrictSlash(false)
+	r.HandleFunc("/", handlerSesionCerrada).Methods("POST")                  //1.0
 	r.HandleFunc("/CrearCuenta", handlerCrearCuenta).Methods("POST")         //1.0
 	r.HandleFunc("/IniciarSesion", handlerIniciarSesion).Methods("POST")     //1.0
 	r.HandleFunc("/CerrarSesion", handlerCerrarSesion).Methods("POST")       //1.0
 	r.HandleFunc("/RecuperarClave1", handlerRecuperarClave1).Methods("POST") //1.0
 	r.HandleFunc("/RecuperarClave2", handlerRecuperarClave2).Methods("POST") //1.0
 	r.HandleFunc("/Quests", handlerQuest).Methods("POST")                    //1.0
-	r.HandleFunc("/Quest", handlerQuest).Methods("POST")                    //1.0
-	r.HandleFunc("/Inscribirse", handlerQuest).Methods("POST")                    //1.0
-	r.HandleFunc("/EnviarRespuesta", handlerQuest).Methods("POST")                    //1.0
+	r.HandleFunc("/Quest", handlerQuest).Methods("POST")                     //1.0
+	r.HandleFunc("/Inscribirse", handlerQuest).Methods("POST")               //1.0
+	r.HandleFunc("/EnviarRespuesta", handlerQuest).Methods("POST")           //1.0
 	server := http.Server{
 		Addr:           param[0],
 		Handler:        r,
@@ -60,35 +74,47 @@ func main() {
 
 //____________________________________________________________________________________________
 
+func handlerSesionCerrada(w http.ResponseWriter, r *http.Request) {
+
+	respuesta, err := json.Marshal(Sesion{Sesion: "Cerrada"})
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+
+}
+
 func handlerCrearCuenta(w http.ResponseWriter, r *http.Request)     {}
 func handlerIniciarSesion(w http.ResponseWriter, r *http.Request)   {}
 func handlerCerrarSesion(w http.ResponseWriter, r *http.Request)    {}
 func handlerRecuperarClave1(w http.ResponseWriter, r *http.Request) {}
 func handlerRecuperarClave2(w http.ResponseWriter, r *http.Request) {}
-func handlerQuest(w http.ResponseWriter, r *http.Request)           {
-	respuesta := QuestMenu{}
-	err := json.NewDecoder(r.Body).Decode(&mitransaccion)
+func handlerQuest(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie(param[1])
 	if err != nil {
-		logger.Println("Errores al ver solicitrudes: " + err.Error())
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(nil)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
-
+	}
+	Cuenta, ok := dbSesiones[c.Value]
+	if !ok {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
 
-	_, _, soli := secuenciaProtesta(mitransaccion, mitransaccion)
-	solicitrudessend, err := json.Marshal(soli)
+	respuesta, err := json.Marshal(questActivas)
 	if err != nil {
-		logger.Println("Errores al ver solicitrudes: " + err.Error())
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(nil)
 		return
-
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(solicitrudessend)
+	w.Write(respuesta)
 
 }
