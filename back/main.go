@@ -9,15 +9,68 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+
 )
+
+var bd *sql.DB
+var param []string
+var questActivas []QuestMenu
+var dbSesiones = map[string]Sesion{} // session ID, user ID
+
+//QuestMenu, objeto para array que lista las quest activas
+type QuestMenu struct {
+	ID_Quest     string `json:"IDQuest"`
+	Nombre_Quest string `json:"NombreQuest"`
+}
+
+//Sesion, objeto para manejar sesiones
+type Sesion struct {
+	Sesion    string
+	TimeStamp time.Time
+}
+
+//Sesion, objeto para manejar sesiones
+type Cuenta struct {
+	IDCuenta     string `json:"NombreQuest"`
+	NombreCuenta string `json:"NombreCuenta"`
+	Email        string `json:"Email"`
+	Clave1       string `json:"Clave1"`
+	Clave2       string `json:"Clave2"`
+	Estado       string `json:"Estado"`
+}
+
+//Representeante, Usuario dueño de la cuenta y Representante de los equipos
+type Representante struct {
+	ID_Representante     string `json:"ID_Representante"`
+	Nombre_Representante string `json:"NombreQuest"`
+}
+
+//Equipo, Equipoque participa en una quest
+type Equipo struct {
+	ID_Equipo     string `json:"IDEquipo"`
+	ID_Quest      string `json:"IDQuest"`
+	Nombre_Equipo string `json:"NombreQuest"`
+}
+
+//Miembro,de un equipo
+type Miembro struct {
+	ID_Miembro     string `json:"IDMiembro"`
+	ID_Equipo      string `json:"IDEquipo"`
+	Nombre_Miembro string `json:"NombreMiembro"`
+	Rut_Miembro    string `json:"RutMiembro"`
+}
 
 func init() {
 	actualizaparam()
+	conectadb()
+	go cargarQestActivas()
+	go cerrarSesiones()
 }
 
 func actualizaparam() {
-	content, err := ioutil.ReadFile("param.txt")
+	content, err := ioutil.ReadFile("parametros.txt")
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -28,9 +81,31 @@ func actualizaparam() {
 }
 
 func conectadb() {
-	bd, err := sql.Open("mysql", param[2]+param[3]+param[4]+param[5]+param[6]+param[7]+param[8])
+
+	bda, err := sql.Open("mysql", param[2]+param[3]+param[4]+param[5]+param[6]+param[7]+param[8])
 	if err != nil {
 		log.Println(err.Error())
+	}
+	bd = bda
+}
+
+func cargarQestActivas() {
+	for {
+		log.Println("Cargando Pendientes")
+		tab, err := bd.Query("select Q.ID_QUEST, Q.NOMBRE_QUEST  from QUEST Q where Q.ESTADO_QUEST = ?", "A")
+		defer tab.Close()
+		if err != nil {
+			log.Println("Errores al marcar Solicitudes: " + err.Error())
+			return
+		}
+		aux1 := []QuestMenu{}
+		for tab.Next() {
+			aux2 := QuestMenu{}
+			err = tab.Scan(&aux2.ID_Quest, &aux2.Nombre_Quest)
+			aux1 = append(aux1, aux2)
+		}
+		questActivas = aux1
+		time.Sleep(time.Hour * 12)
 	}
 }
 
@@ -60,6 +135,7 @@ func main() {
 	r.HandleFunc("/Quest", handlerQuest).Methods("POST")                     //1.0
 	r.HandleFunc("/Inscribirse", handlerQuest).Methods("POST")               //1.0
 	r.HandleFunc("/EnviarRespuesta", handlerQuest).Methods("POST")           //1.0
+
 	server := http.Server{
 		Addr:           param[0],
 		Handler:        r,
@@ -67,9 +143,12 @@ func main() {
 		WriteTimeout:   3 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
-	log.Println("escuchando puerto" + param[0])
 
-	server.ListenAndServe()
+	log.Println("escuchando puerto: " + param[0])
+
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 //____________________________________________________________________________________________
@@ -100,7 +179,7 @@ func handlerQuest(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	Cuenta, ok := dbSesiones[c.Value]
+	_, ok := dbSesiones[c.Value]
 	if !ok {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
