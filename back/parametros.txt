@@ -1,0 +1,9 @@
+TEST
+
+root:
+
+@tcp(
+localhost
+:3306
+)/
+quester
