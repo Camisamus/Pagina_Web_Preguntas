@@ -11,7 +11,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
-
 )
 
 var bd *sql.DB
@@ -168,7 +167,29 @@ func handlerSesionCerrada(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func handlerCrearCuenta(w http.ResponseWriter, r *http.Request)     {}
+func handlerCrearCuenta(w http.ResponseWriter, r *http.Request) {
+
+	nuevaCuenta := Cuenta{}
+	err := json.NewDecoder(r.Body).Decode(&nuevaCuenta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	resultado, err := CrearCuenta(nuevaCuenta)
+	respuesta, err := json.Marshal(resultado)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+
+}
 func handlerIniciarSesion(w http.ResponseWriter, r *http.Request)   {}
 func handlerCerrarSesion(w http.ResponseWriter, r *http.Request)    {}
 func handlerRecuperarClave1(w http.ResponseWriter, r *http.Request) {}
@@ -187,6 +208,7 @@ func handlerQuest(w http.ResponseWriter, r *http.Request) {
 
 	respuesta, err := json.Marshal(questActivas)
 	if err != nil {
+		log.Println("Error: " + err.Error())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(nil)
@@ -196,4 +218,31 @@ func handlerQuest(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write(respuesta)
 
+}
+func CrearCuenta(nuevaCuenta Cuenta) (Cuenta, error) {
+	var cuentaCreada = Cuenta{Estado: "False"}
+	if nuevaCuenta.Clave1 == nuevaCuenta.Clave2 {
+		db1, err := bd.Begin()
+		if err != nil {
+			log.Println("Error: " + err.Error())
+			return cuentaCreada, err
+		}
+		db1.Exec("insert into cuenta (EMAIL, CLAVE, NOMBRE, ESTADO) values (?,?,?,'1'", nuevaCuenta.Email, nuevaCuenta.Clave1, nuevaCuenta.NombreCuenta)
+		tab, err := bd.Query("LAST_INSERT_ID()")
+		defer tab.Close()
+		if err != nil {
+			log.Println("Error: " + err.Error())
+			return cuentaCreada, err
+		}
+		for tab.Next() {
+			err = tab.Scan(&cuentaCreada.IDCuenta)
+		}
+
+		err = db1.Commit()
+		if err != nil {
+			log.Println("Error: " + err.Error())
+			return cuentaCreada, err
+		}
+	}
+	return cuentaCreada, nil
 }
