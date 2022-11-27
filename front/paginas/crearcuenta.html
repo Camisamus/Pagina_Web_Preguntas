@@ -2,6 +2,8 @@
 <html lang="es">
   <head>
     <link rel="stylesheet" href="../recursos/css/style1.css" />
+    <script src="../recursos/js/jquery-3.4.1.js"></script>
+    <script src="../recursos/js/funciones.js"></script>
   </head>
   <body>
     <div class="headerdiv"></div>
@@ -31,12 +33,17 @@
             <div class="inputter">
               <label for="password2">Repetir Clave</label>
               <br />
-              <input type="password2" id="password2" name="password2" />
+              <input type="password" id="password2" name="password2" />
             </div>
 
             <div class="inputter">
               <br />
-              <input type="submit" id="enviar" />
+              <input
+                type="button"
+                id="enviar"
+                onclick="CrearCuenta()"
+                value="Enviar"
+              />
             </div>
           </form>
         </div>

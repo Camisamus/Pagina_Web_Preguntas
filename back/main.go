@@ -32,7 +32,7 @@ type Sesion struct {
 
 //Sesion, objeto para manejar sesiones
 type Cuenta struct {
-	IDCuenta     string `json:"NombreQuest"`
+	IDCuenta     string `json:"IDCuenta"`
 	NombreCuenta string `json:"NombreCuenta"`
 	Email        string `json:"Email"`
 	Clave1       string `json:"Clave1"`
@@ -124,6 +124,7 @@ func cerrarSesiones() {
 //____________________________________________________________________________________________
 func main() {
 	r := mux.NewRouter().StrictSlash(false)
+	enableCORS(r)
 	r.HandleFunc("/", handlerSesionCerrada).Methods("POST")                  //1.0
 	r.HandleFunc("/CrearCuenta", handlerCrearCuenta).Methods("POST")         //1.0
 	r.HandleFunc("/IniciarSesion", handlerIniciarSesion).Methods("POST")     //1.0
@@ -150,11 +151,35 @@ func main() {
 	}
 }
 
+func enableCORS(router *mux.Router) {
+	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	}).Methods(http.MethodOptions)
+	router.Use(middlewareCors)
+}
+
+func middlewareCors(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, req *http.Request) {
+			// Just put some headers to allow CORS...
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+			// and call next handler!
+			next.ServeHTTP(w, req)
+		})
+}
+
 //____________________________________________________________________________________________
 
 func handlerSesionCerrada(w http.ResponseWriter, r *http.Request) {
 
-	respuesta, err := json.Marshal(Sesion{Sesion: "Cerrada"})
+	respuesta, err := json.Marshal(Sesion{
+		Sesion:    "Cerrada",
+		TimeStamp: time.Time{},
+	})
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -178,6 +203,12 @@ func handlerCrearCuenta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resultado, err := CrearCuenta(nuevaCuenta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
 	respuesta, err := json.Marshal(resultado)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -197,12 +228,12 @@ func handlerRecuperarClave2(w http.ResponseWriter, r *http.Request) {}
 func handlerQuest(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie(param[1])
 	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		handlerSesionCerrada(w, r)
 		return
 	}
 	_, ok := dbSesiones[c.Value]
 	if !ok {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		handlerSesionCerrada(w, r)
 		return
 	}
 
@@ -227,15 +258,24 @@ func CrearCuenta(nuevaCuenta Cuenta) (Cuenta, error) {
 			log.Println("Error: " + err.Error())
 			return cuentaCreada, err
 		}
-		db1.Exec("insert into cuenta (EMAIL, CLAVE, NOMBRE, ESTADO) values (?,?,?,'1'", nuevaCuenta.Email, nuevaCuenta.Clave1, nuevaCuenta.NombreCuenta)
-		tab, err := bd.Query("LAST_INSERT_ID()")
+		tab1, err := db1.Query("insert into cuenta (EMAIL, CLAVE, NOMBRE, ESTADO) values (?,?,?,'1')", nuevaCuenta.Email, nuevaCuenta.Clave1, nuevaCuenta.NombreCuenta)
+		defer tab1.Close()
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return cuentaCreada, err
+		}
+		tab, err := bd.Query("select LAST_INSERT_ID()")
 		defer tab.Close()
 		if err != nil {
+			db1.Rollback()
 			log.Println("Error: " + err.Error())
 			return cuentaCreada, err
 		}
 		for tab.Next() {
 			err = tab.Scan(&cuentaCreada.IDCuenta)
+			cuentaCreada = nuevaCuenta
+			cuentaCreada.Estado = "True"
 		}
 
 		err = db1.Commit()
