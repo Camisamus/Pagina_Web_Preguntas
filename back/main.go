@@ -1,8 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,12 +17,14 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var bd *sql.DB
 var param []string
 var questActivas []QuestMenu
 var dbSesiones = map[string]Sesion{} // session ID, user ID
+var claveDeEncriptado *[32]byte
 
 //QuestMenu, objeto para array que lista las quest activas
 type QuestMenu struct {
@@ -63,6 +71,7 @@ type Miembro struct {
 
 func init() {
 	actualizaparam()
+	claveDeEncriptado = crearclave()
 	conectadb()
 	go cargarQestActivas()
 	go cerrarSesiones()
@@ -221,7 +230,39 @@ func handlerCrearCuenta(w http.ResponseWriter, r *http.Request) {
 	w.Write(respuesta)
 
 }
-func handlerIniciarSesion(w http.ResponseWriter, r *http.Request)   {}
+func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
+
+	ingreso := Cuenta{}
+	err := json.NewDecoder(r.Body).Decode(&nuevaCuenta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	resultado, err := CrearCuenta(nuevaCuenta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	respuesta, err := json.Marshal(resultado)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+
+	error := bcrypt.CompareHashAndPassword([]byte(ingreso.Contraseña), ContraseñaIngresada)
+	if error != nil {
+		return
+	}
+}
 func handlerCerrarSesion(w http.ResponseWriter, r *http.Request)    {}
 func handlerRecuperarClave1(w http.ResponseWriter, r *http.Request) {}
 func handlerRecuperarClave2(w http.ResponseWriter, r *http.Request) {}
@@ -253,27 +294,40 @@ func handlerQuest(w http.ResponseWriter, r *http.Request) {
 func CrearCuenta(nuevaCuenta Cuenta) (Cuenta, error) {
 	var cuentaCreada = Cuenta{Estado: "False"}
 	if nuevaCuenta.Clave1 == nuevaCuenta.Clave2 {
+
+		contraseñaPlanaComoByte1 := []byte(param[10])
+		hash1, err := bcrypt.GenerateFromPassword(contraseñaPlanaComoByte1, 11) //DefaultCost es 10
+		if err != nil {
+			log.Println("Error: " + err.Error())
+			return cuentaCreada, err
+		}
+		nuevaCuenta.Clave1 = string(hash1)
 		db1, err := bd.Begin()
 		if err != nil {
 			log.Println("Error: " + err.Error())
 			return cuentaCreada, err
 		}
 		tab1, err := db1.Query("insert into cuenta (EMAIL, CLAVE, NOMBRE, ESTADO) values (?,?,?,'1')", nuevaCuenta.Email, nuevaCuenta.Clave1, nuevaCuenta.NombreCuenta)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return cuentaCreada, err
+		}
 		defer tab1.Close()
-		if err != nil {
-			db1.Rollback()
-			log.Println("Error: " + err.Error())
-			return cuentaCreada, err
-		}
 		tab, err := bd.Query("select LAST_INSERT_ID()")
-		defer tab.Close()
 		if err != nil {
 			db1.Rollback()
 			log.Println("Error: " + err.Error())
 			return cuentaCreada, err
 		}
+		defer tab.Close()
 		for tab.Next() {
 			err = tab.Scan(&cuentaCreada.IDCuenta)
+			if err != nil {
+				db1.Rollback()
+				log.Println("Error: " + err.Error())
+				return cuentaCreada, err
+			}
 			cuentaCreada = nuevaCuenta
 			cuentaCreada.Estado = "True"
 		}
@@ -285,4 +339,65 @@ func CrearCuenta(nuevaCuenta Cuenta) (Cuenta, error) {
 		}
 	}
 	return cuentaCreada, nil
+}
+
+//_____________________________funciones crypto------------------
+
+func crearclave() *[32]byte { //*bytes.Buffer { //
+	var key []byte
+	w := bytes.NewBuffer(key)
+	for i := 0; i < 32; i++ {
+		w.WriteByte(param[9][0])
+	}
+	nk := [32]byte{}
+	newkey := []byte(w.String())
+	copy(nk[:], newkey)
+	return &nk
+}
+
+func encrypt(plaintext []byte, key *[32]byte) (ciphertext []byte, err error) {
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		log.Println("Errores al encryptar: " + err.Error())
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		log.Println("Errores al encryptar: " + err.Error())
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
+		log.Println("Errores al encryptar: " + err.Error())
+		return nil, err
+	}
+
+	return gcm.Seal(nonce, nonce, plaintext, nil), nil
+}
+
+func decrypt(ciphertext []byte, key *[32]byte) (plaintext []byte, err error) {
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		log.Println("Errores al desencryptar: " + err.Error())
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		log.Println("Errores al desencryptar: " + err.Error())
+		return nil, err
+	}
+
+	if len(ciphertext) < gcm.NonceSize() {
+		return nil, errors.New("malformed ciphertext")
+	}
+
+	return gcm.Open(nil,
+		ciphertext[:gcm.NonceSize()],
+		ciphertext[gcm.NonceSize():],
+		nil,
+	)
 }

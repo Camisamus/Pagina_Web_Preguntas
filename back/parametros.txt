@@ -7,3 +7,5 @@ localhost
 :3306
 )/
 quester
+ClaveParaEncriptarSuperSegura123
+clave1234
