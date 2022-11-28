@@ -17,6 +17,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -24,6 +25,7 @@ var bd *sql.DB
 var param []string
 var questActivas []QuestMenu
 var dbSesiones = map[string]Sesion{} // session ID, user ID
+var dbUsuarios = map[string]Cuenta{} //
 var claveDeEncriptado *[32]byte
 
 //QuestMenu, objeto para array que lista las quest activas
@@ -233,19 +235,34 @@ func handlerCrearCuenta(w http.ResponseWriter, r *http.Request) {
 func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 
 	ingreso := Cuenta{}
-	err := json.NewDecoder(r.Body).Decode(&nuevaCuenta)
+	err := json.NewDecoder(r.Body).Decode(&ingreso)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(nil)
 		return
 	}
-	resultado, err := CrearCuenta(nuevaCuenta)
+	resultado, err := ingresar(ingreso)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(nil)
 		return
+	}
+	if resultado.Estado == "True" {
+		sID, _ := uuid.NewV4()
+		c := &http.Cookie{
+			Name:  param[1],
+			Value: sID.String(),
+		}
+		http.SetCookie(w, c)
+		ses := Sesion{}
+		ses.Sesion = resultado.Email
+		ses.TimeStamp = time.Now()
+		dbSesiones[c.Value] = ses
+		dbUsuarios[resultado.Email] = resultado
+		resultado.Clave1 = ""
+		resultado.Clave2 = ""
 	}
 	respuesta, err := json.Marshal(resultado)
 	if err != nil {
@@ -257,11 +274,6 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(respuesta)
-
-	error := bcrypt.CompareHashAndPassword([]byte(ingreso.Contraseña), ContraseñaIngresada)
-	if error != nil {
-		return
-	}
 }
 func handlerCerrarSesion(w http.ResponseWriter, r *http.Request)    {}
 func handlerRecuperarClave1(w http.ResponseWriter, r *http.Request) {}
@@ -295,7 +307,7 @@ func CrearCuenta(nuevaCuenta Cuenta) (Cuenta, error) {
 	var cuentaCreada = Cuenta{Estado: "False"}
 	if nuevaCuenta.Clave1 == nuevaCuenta.Clave2 {
 
-		contraseñaPlanaComoByte1 := []byte(param[10])
+		contraseñaPlanaComoByte1 := []byte(nuevaCuenta.Clave1)
 		hash1, err := bcrypt.GenerateFromPassword(contraseñaPlanaComoByte1, 11) //DefaultCost es 10
 		if err != nil {
 			log.Println("Error: " + err.Error())
@@ -339,6 +351,51 @@ func CrearCuenta(nuevaCuenta Cuenta) (Cuenta, error) {
 		}
 	}
 	return cuentaCreada, nil
+}
+func ingresar(cuenta Cuenta) (Cuenta, error) {
+	var cuentaingresada = Cuenta{Estado: "False"}
+
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return cuentaingresada, err
+	}
+	tab1, err := db1.Query("SELECT c.ID_CUENTA,	c.NOMBRE , c.EMAIL, c.CLAVE, c.ESTADO FROM cuenta c where c.EMAIL = ?", cuenta.Email)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return cuentaingresada, err
+	}
+	defer tab1.Close()
+	noEncionado := false
+	for tab1.Next() {
+		err = tab1.Scan(&cuentaingresada.IDCuenta, &cuentaingresada.NombreCuenta, &cuentaingresada.Email, &cuentaingresada.Clave1, &cuentaingresada.Estado)
+		noEncionado = true
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return cuentaingresada, err
+		}
+	}
+	err = db1.Commit()
+
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return cuentaingresada, err
+	}
+
+	error := bcrypt.CompareHashAndPassword([]byte(cuentaingresada.Clave1), []byte(cuenta.Clave1))
+	if error != nil {
+		cuentaingresada.Estado = "Email o contraseña Incorrectos"
+		return cuentaingresada, err
+	}
+	if !noEncionado {
+		cuentaingresada.Estado = "Email o contraseña Incorrectos"
+		return cuentaingresada, err
+	}
+	cuentaingresada.Estado = "True"
+
+	return cuentaingresada, nil
 }
 
 //_____________________________funciones crypto------------------

@@ -11,24 +11,27 @@
       <div class="navbardiv" id="navbardiv"></div>
       <div class="contentdiv">
         <div class="formLoguin">
-          <form action="#">
-            <div class="inputter">
-              <label for="cuenta">Cuenta</label>
-              <br />
-              <input type="text" id="cuenta" name="cuenta" />
-            </div>
+          <div class="inputter">
+            <label for="email">Email</label>
+            <br />
+            <input type="text" id="email" name="email" />
+          </div>
 
-            <div class="inputter">
-              <label for="password">Clave</label>
-              <br />
-              <input type="password" id="password" name="password" />
-            </div>
+          <div class="inputter">
+            <label for="password">Clave</label>
+            <br />
+            <input type="password" id="password" name="password" />
+          </div>
 
-            <div class="inputter">
-              <br />
-              <input type="submit" id="enviar" />
-            </div>
-          </form>
+          <div class="inputter">
+            <br />
+            <input
+              type="button"
+              id="enviar"
+              value="Enviar"
+              onclick="iniciarsesion()"
+            />
+          </div>
         </div>
       </div>
     </div>
