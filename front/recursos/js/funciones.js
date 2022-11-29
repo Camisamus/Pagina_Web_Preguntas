@@ -51,12 +51,9 @@ function sQuests() {
             url: this.source,
             xhrFields: {
                 withCredentials: true,
+                credentials: 'include'
             },
-            dataType: "JSON",
-            beforeSend: function(xhr) {
-                AddToHeader(xhr);
-            },
-            data: {},
+            data: "",
             method: 'POST',
             success: function(data) {
                 if (data.Sesion == "Cerrada") { window.location.href = "../paginas/inicio.html" }

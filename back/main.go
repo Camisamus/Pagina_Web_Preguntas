@@ -255,9 +255,9 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 			Name:     param[1],
 			Value:    sID.String(),
 			SameSite: http.SameSiteNoneMode,
-			Secure:   false,
+			Secure:   true,
 			Expires:  time.Now().Add(time.Hour + 2),
-			Path:     "/",
+			Path:     "/Quests",
 		}
 		http.SetCookie(w, c)
 		ses := Sesion{}
@@ -281,13 +281,7 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 }
 func handlerCerrarSesion(w http.ResponseWriter, r *http.Request) {
 
-	resultado, err := ingresar(Cuenta{Estado: "Cerrada"})
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(nil)
-		return
-	}
+	resultado := Cuenta{Estado: "Cerrada"}
 
 	c, err := r.Cookie(param[1])
 	if err != nil {
