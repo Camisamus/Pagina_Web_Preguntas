@@ -31,7 +31,7 @@ function CrearCuenta() {
 
 function iniciarsesion() {
     if ($("#email").val() == "" || $("#password").val() == "") { alert("Formulario incompeto!"); return false; }
-    var iniciarSesion = new Singresar();
+    var iniciarSesion = new sIngresar();
     iniciarSesion.consultar();
 
 }
@@ -49,17 +49,20 @@ function sQuests() {
 
         $.ajax({
             url: this.source,
+            xhrFields: {
+                withCredentials: true,
+            },
+            dataType: "JSON",
+            beforeSend: function(xhr) {
+                AddToHeader(xhr);
+            },
             data: {},
             method: 'POST',
             success: function(data) {
-                if (data.Estado == "True") { window.location.href = "../paginas/ingreso.html" }
+                if (data.Sesion == "Cerrada") { window.location.href = "../paginas/inicio.html" }
 
-                //alert(data.Sesion);
-                //_data = jQuery.parseJSON(data);
-                //if (that.callback) that.callback(_data, that.extra);
             },
             error: function(data) {
-                //alert(data);
                 window.location.href = "../paginas/error.html"
             },
             async: true
@@ -93,13 +96,8 @@ function sCrearCuenta() {
             method: 'POST',
             success: function(data) {
                 if (data.Sesion == "Cerrada" && location.href.slice(-11) != 'inicio.html') { window.location.href = "../paginas/inicio.html" }
-
-                //alert(data.Sesion);
-                //_data = jQuery.parseJSON(data);
-                //if (that.callback) that.callback(_data, that.extra);
             },
             error: function(data) {
-                //alert(data);
                 window.location.href = "../paginas/error.html"
             },
             async: true
@@ -107,7 +105,7 @@ function sCrearCuenta() {
     };
 }
 
-function Singresar() {
+function sIngresar() {
 
     this.source = 'http://localhost:8090/IniciarSesion';
 
@@ -120,6 +118,9 @@ function Singresar() {
 
         $.ajax({
             url: this.source,
+            xhrFields: {
+                withCredentials: true,
+            },
             data: JSON.stringify({
                 Email: $("#email").val(),
                 Clave1: $("#password").val(),
@@ -127,14 +128,39 @@ function Singresar() {
             }),
             method: 'POST',
             success: function(data) {
-                if (data.Sesion == "Cerrada" && location.href.slice(-11) != 'inicio.html') { window.location.href = "../paginas/inicio.html" }
-
-                //alert(data.Sesion);
-                //_data = jQuery.parseJSON(data);
-                //if (that.callback) that.callback(_data, that.extra);
+                if (data.Estado == "True" && location.href.slice(-12) != 'ingreso.html') {
+                    document.cookie = data.Clave1 + "=" + data.Clave2;
+                    window.location.href = "../paginas/ingreso.html";
+                }
+                if (data.Estado != "True") { alert(data.Estado) }
             },
             error: function(data) {
-                //alert(data);
+                window.location.href = "../paginas/error.html"
+            },
+            async: true
+        });
+    };
+}
+
+function sSalir() {
+
+    this.source = 'http://localhost:8090/CerrarSesion';
+
+    this.callback = null;
+    this.extra = null;
+
+    this.consultar = function() {
+        var data = ""
+        var that = this;
+
+        $.ajax({
+            url: this.source,
+            data: {},
+            method: 'POST',
+            success: function(data) {
+                if (data.Sesion == "Cerrada" && location.href.slice(-11) != 'inicio.html') { window.location.href = "../paginas/inicio.html" }
+            },
+            error: function(data) {
                 window.location.href = "../paginas/error.html"
             },
             async: true

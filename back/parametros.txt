@@ -1,5 +1,5 @@
 :8090
-Mycooky
+Mycookie
 root:
 
 @tcp(

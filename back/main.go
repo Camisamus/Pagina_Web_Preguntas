@@ -174,7 +174,7 @@ func middlewareCors(next http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, req *http.Request) {
 			// Just put some headers to allow CORS...
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Origin", "null")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
@@ -252,17 +252,21 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 	if resultado.Estado == "True" {
 		sID, _ := uuid.NewV4()
 		c := &http.Cookie{
-			Name:  param[1],
-			Value: sID.String(),
+			Name:     param[1],
+			Value:    sID.String(),
+			SameSite: http.SameSiteNoneMode,
+			Secure:   false,
+			Expires:  time.Now().Add(time.Hour + 2),
+			Path:     "/",
 		}
 		http.SetCookie(w, c)
 		ses := Sesion{}
 		ses.Sesion = resultado.Email
 		ses.TimeStamp = time.Now()
-		dbSesiones[c.Value] = ses
+		dbSesiones[sID.String()] = ses
 		dbUsuarios[resultado.Email] = resultado
-		resultado.Clave1 = ""
-		resultado.Clave2 = ""
+		resultado.Clave1 = param[1]
+		resultado.Clave2 = sID.String()
 	}
 	respuesta, err := json.Marshal(resultado)
 	if err != nil {
@@ -275,7 +279,47 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write(respuesta)
 }
-func handlerCerrarSesion(w http.ResponseWriter, r *http.Request)    {}
+func handlerCerrarSesion(w http.ResponseWriter, r *http.Request) {
+
+	resultado, err := ingresar(Cuenta{Estado: "Cerrada"})
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+
+	c, err := r.Cookie(param[1])
+	if err != nil {
+		handlerSesionCerrada(w, r)
+		return
+	}
+	sesion, ok := dbSesiones[c.Value]
+	if !ok {
+		handlerSesionCerrada(w, r)
+		return
+	}
+	_, ok = dbUsuarios[sesion.Sesion]
+	if !ok {
+		handlerSesionCerrada(w, r)
+		return
+	}
+
+	delete(dbUsuarios, dbSesiones[sesion.Sesion].Sesion)
+	delete(dbSesiones, sesion.Sesion)
+
+	respuesta, err := json.Marshal(resultado)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+}
+
 func handlerRecuperarClave1(w http.ResponseWriter, r *http.Request) {}
 func handlerRecuperarClave2(w http.ResponseWriter, r *http.Request) {}
 func handlerQuest(w http.ResponseWriter, r *http.Request) {
