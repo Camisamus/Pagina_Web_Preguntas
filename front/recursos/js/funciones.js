@@ -1,6 +1,10 @@
+const urlParams = new URLSearchParams(window.location.search.substring(1));
 const Inicios = {
+    "*********": () => {},
     "Main.html": () => {},
-    "icio.html": () => {},
+    "icio.html": () => {
+        cerrarSesion()
+    },
     "enta.html": () => {},
     "enta.html": () => {},
     "lave.html": () => {},
@@ -35,6 +39,22 @@ function iniciarsesion() {
     iniciarSesion.consultar();
 
 }
+
+function cerrarSesion() {
+    var salida = new sSalir()
+    salida.consultar();
+}
+
+function recuperarClave1() {
+    var RecuperarClave1 = new sRecuperarClave1();
+    RecuperarClave1.consultar();
+}
+
+function recuperarclave2() {
+    var RecuperarClave2 = new sRecuperarClave2();
+    RecuperarClave2.consultar();
+}
+
 
 function sQuests() {
 
@@ -152,10 +172,73 @@ function sSalir() {
 
         $.ajax({
             url: this.source,
+            xhrFields: {
+                withCredentials: true,
+            },
             data: {},
             method: 'POST',
             success: function(data) {
                 if (data.Sesion == "Cerrada" && location.href.slice(-11) != 'inicio.html') { window.location.href = "../paginas/inicio.html" }
+            },
+            error: function(data) {
+                window.location.href = "../paginas/error.html"
+            },
+            async: true
+        });
+    };
+}
+
+
+function sRecuperarClave1() {
+
+    this.source = 'http://localhost:8090/RecuperarClave1';
+
+    this.callback = null;
+    this.extra = null;
+
+    this.consultar = function() {
+        var data = ""
+        var that = this;
+
+        $.ajax({
+            url: this.source,
+            data: JSON.stringify({
+                Email: $("#email").val(),
+            }),
+            method: 'POST',
+            success: function(data) {
+                window.location.href = "../paginas/inicio.html"
+            },
+            error: function(data) {
+                window.location.href = "../paginas/error.html"
+            },
+            async: true
+        });
+    };
+}
+
+function sRecuperarClave2() {
+
+    this.source = 'http://localhost:8090/RecuperarClave2';
+
+    this.callback = null;
+    this.extra = null;
+
+    this.consultar = function() {
+        var data = ""
+        var that = this;
+
+        $.ajax({
+            url: this.source,
+            data: JSON.stringify({
+                Clave1: $("#password").val(),
+                Clave2: $("#password2").val(),
+                Estado: urlParams.get('ClaveCambio'),
+            }),
+            method: 'POST',
+            success: function(data) {
+                alert(data.Estado);
+                window.location.href = "../paginas/inicio.html"
             },
             error: function(data) {
                 window.location.href = "../paginas/error.html"

@@ -8,3 +8,10 @@ localhost
 )/
 quester
 ClaveParaEncriptarSuperSegura123
+
+
+Paginaweb
+smtp.gmail.com
+mail@gmail.com
+clave
+:587

@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/smtp"
 	"strings"
 	"time"
 
@@ -24,8 +25,9 @@ import (
 var bd *sql.DB
 var param []string
 var questActivas []QuestMenu
-var dbSesiones = map[string]Sesion{} // session ID, user ID
-var dbUsuarios = map[string]Cuenta{} //
+var dbSesiones = map[string]Sesion{}                // session ID, user ID
+var dbUsuarios = map[string]Cuenta{}                //
+var dbClavesEnproceso = map[string]CuentaEnEspera{} //
 var claveDeEncriptado *[32]byte
 
 //QuestMenu, objeto para array que lista las quest activas
@@ -71,12 +73,19 @@ type Miembro struct {
 	Rut_Miembro    string `json:"RutMiembro"`
 }
 
+//Miembro,de un equipo
+type CuentaEnEspera struct {
+	Cuenta    Cuenta
+	TimeStamp time.Time
+}
+
 func init() {
 	actualizaparam()
 	claveDeEncriptado = crearclave()
 	conectadb()
 	go cargarQestActivas()
 	go cerrarSesiones()
+	go clavesNoRecuperadas()
 }
 
 func actualizaparam() {
@@ -125,10 +134,24 @@ func cerrarSesiones() {
 		timenow := time.Now().Add(time.Hour * -2)
 		for key, element := range dbSesiones {
 			if element.TimeStamp.Before(timenow) {
+				delete(dbUsuarios, element.Sesion)
 				delete(dbSesiones, key)
 			}
 		}
 		time.Sleep(time.Hour * 2)
+	}
+}
+
+func clavesNoRecuperadas() {
+	for {
+		log.Println("Eliminando Claves No Recuperadas")
+		timenow := time.Now().Add(time.Hour * -24)
+		for key, element := range dbClavesEnproceso {
+			if element.TimeStamp.Before(timenow) {
+				delete(dbClavesEnproceso, key)
+			}
+		}
+		time.Sleep(time.Hour * 24)
 	}
 }
 
@@ -260,6 +283,15 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 			Path:     "/Quests",
 		}
 		http.SetCookie(w, c)
+		c2 := &http.Cookie{
+			Name:     param[1],
+			Value:    sID.String(),
+			SameSite: http.SameSiteNoneMode,
+			Secure:   true,
+			Expires:  time.Now().Add(time.Hour + 2),
+			Path:     "/CerrarSesion",
+		}
+		http.SetCookie(w, c2)
 		ses := Sesion{}
 		ses.Sesion = resultado.Email
 		ses.TimeStamp = time.Now()
@@ -281,8 +313,6 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 }
 func handlerCerrarSesion(w http.ResponseWriter, r *http.Request) {
 
-	resultado := Cuenta{Estado: "Cerrada"}
-
 	c, err := r.Cookie(param[1])
 	if err != nil {
 		handlerSesionCerrada(w, r)
@@ -299,10 +329,34 @@ func handlerCerrarSesion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	delete(dbUsuarios, dbSesiones[sesion.Sesion].Sesion)
-	delete(dbSesiones, sesion.Sesion)
+	delete(dbUsuarios, sesion.Sesion)
+	delete(dbSesiones, c.Value)
+	respuesta, err := json.Marshal(Sesion{
+		Sesion:    "Cerrada",
+		TimeStamp: time.Time{},
+	})
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(respuesta)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+}
 
-	respuesta, err := json.Marshal(resultado)
+func handlerRecuperarClave1(w http.ResponseWriter, r *http.Request) {
+
+	Cuenta := Cuenta{}
+	err := json.NewDecoder(r.Body).Decode(&Cuenta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	err = recuperarClave1(Cuenta)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -311,11 +365,56 @@ func handlerCerrarSesion(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(respuesta)
+	w.Write([]byte("{}"))
 }
+func handlerRecuperarClave2(w http.ResponseWriter, r *http.Request) {
+	Cuenta := Cuenta{}
+	err := json.NewDecoder(r.Body).Decode(&Cuenta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	clavevieja, ok := dbClavesEnproceso[Cuenta.Estado]
+	if (Cuenta.Clave1 != Cuenta.Clave2) || (Cuenta.Clave2 == "") || (!ok) {
+		respuesta, err := json.Marshal(Sesion{
+			Sesion: "No se genero una clave Nueva",
+		})
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(respuesta)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respuesta)
 
-func handlerRecuperarClave1(w http.ResponseWriter, r *http.Request) {}
-func handlerRecuperarClave2(w http.ResponseWriter, r *http.Request) {}
+	}
+	err = recuperarClave2(Cuenta, clavevieja.Cuenta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+
+	delete(dbClavesEnproceso, Cuenta.Estado)
+	respuesta, err := json.Marshal(Sesion{
+		Sesion: "Ya puede ingresar con su nueva clave",
+	})
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(respuesta)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+
+}
 func handlerQuest(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie(param[1])
 	if err != nil {
@@ -405,10 +504,10 @@ func ingresar(cuenta Cuenta) (Cuenta, error) {
 		return cuentaingresada, err
 	}
 	defer tab1.Close()
-	noEncionado := false
+	encontrado := false
 	for tab1.Next() {
 		err = tab1.Scan(&cuentaingresada.IDCuenta, &cuentaingresada.NombreCuenta, &cuentaingresada.Email, &cuentaingresada.Clave1, &cuentaingresada.Estado)
-		noEncionado = true
+		encontrado = true
 		if err != nil {
 			db1.Rollback()
 			log.Println("Error: " + err.Error())
@@ -427,13 +526,79 @@ func ingresar(cuenta Cuenta) (Cuenta, error) {
 		cuentaingresada.Estado = "Email o contraseña Incorrectos"
 		return cuentaingresada, err
 	}
-	if !noEncionado {
+	if !encontrado {
 		cuentaingresada.Estado = "Email o contraseña Incorrectos"
 		return cuentaingresada, err
 	}
 	cuentaingresada.Estado = "True"
 
 	return cuentaingresada, nil
+}
+
+func recuperarClave1(cuenta Cuenta) error {
+	var cuentaingresada = Cuenta{Estado: "False"}
+
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	tab1, err := db1.Query("SELECT c.ID_CUENTA,	c.NOMBRE , c.EMAIL, c.CLAVE, c.ESTADO FROM cuenta c where c.EMAIL = ?", cuenta.Email)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	defer tab1.Close()
+	encontrado := false
+	for tab1.Next() {
+		err = tab1.Scan(&cuentaingresada.IDCuenta, &cuentaingresada.NombreCuenta, &cuentaingresada.Email, &cuentaingresada.Clave1, &cuentaingresada.Estado)
+		encontrado = true
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return err
+		}
+	}
+	err = db1.Commit()
+	if encontrado {
+		sID, _ := uuid.NewV4()
+		dbClavesEnproceso[sID.String()] = CuentaEnEspera{
+			Cuenta:    cuentaingresada,
+			TimeStamp: time.Now(),
+		}
+
+		link := "https://" + param[12] + "/recuperarclave2.html?ClaveCambio=" + sID.String()
+		msg := "Su Link Es:  " + link
+		log.Println("Contraseña Habilitada para crearse :" + cuentaingresada.NombreCuenta)
+		return enviarmail(msg, cuentaingresada.Email, "Link Para Cambiar Clave :")
+
+	}
+	return nil
+}
+
+func recuperarClave2(nuevasClaves Cuenta, cuentaAcutal Cuenta) error {
+	contraseñaPlanaComoByte1 := []byte(nuevasClaves.Clave1)
+	hash1, err := bcrypt.GenerateFromPassword(contraseñaPlanaComoByte1, 11) //DefaultCost es 10
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	nuevasClaves.Clave1 = string(hash1)
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	_, err = db1.Query("UPDATE cuenta SET CLAVE = ? where EMAIL = ?", nuevasClaves.Clave1, cuentaAcutal.Email)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	err = db1.Commit()
+
+	return nil
 }
 
 //_____________________________funciones crypto------------------
@@ -495,4 +660,32 @@ func decrypt(ciphertext []byte, key *[32]byte) (plaintext []byte, err error) {
 		ciphertext[gcm.NonceSize():],
 		nil,
 	)
+}
+
+func enviarmail(contenido string, destin string, motivo string) error {
+	// Set up authentication information.
+	log.Println(contenido)
+	auth := smtp.PlainAuth(
+		"",
+		param[14],
+		param[15],
+		param[13],
+	)
+	// Connect to the server, authenticate, set the sender and recipient,
+	msg := "From: " + param[14] + "\n" +
+		"To: " + destin + "\n" + "Subject: " + motivo + " :  \n\n" + contenido
+	// and send the email all in one step.
+	err := smtp.SendMail(
+		param[13]+param[16],
+		auth,
+		param[15],
+		[]string{destin},
+		[]byte(msg),
+	)
+	if err != nil {
+		log.Println("-->ERROR al Enviar Email :" + err.Error())
+		//return err //////////////////////////////////////////////////////////////////esta linea debe ser reactivada
+	}
+	log.Println("Email Enviado a :" + destin)
+	return nil
 }

@@ -11,17 +11,20 @@
       <div class="navbardiv" id="navbardiv"></div>
       <div class="contentdiv">
         <div class="formLoguin">
-          <form action="#">
-            <div class="inputter">
-              <label for="email">Email</label>
-              <br />
-              <input type="text" id="email" name="email" />
-            </div>
-            <div class="inputter">
-              <br />
-              <input type="submit" id="enviar" />
-            </div>
-          </form>
+          <div class="inputter">
+            <label for="email">Email</label>
+            <br />
+            <input type="text" id="email" name="email" />
+          </div>
+          <div class="inputter">
+            <br />
+            <input
+              type="button"
+              id="enviar"
+              onclick="recuperarClave1()"
+              value="Enviar Email"
+            />
+          </div>
         </div>
       </div>
     </div>
