@@ -79,32 +79,7 @@ function sQuests() {
             method: 'POST',
             success: function(data) {
                 if (data.Sesion == "Cerrada") { window.location.href = "../paginas/inicio.html"; return; }
-                let lista = document.getElementById("navbardiv");
-                let cerrarSesion = document.createElement("input");
-                cerrarSesion.setAttribute("type", "button");
-                cerrarSesion.setAttribute("value", "Cerrar Sesion");
-                cerrarSesion.setAttribute("onclick", "cerrarSesion()");
-                lista.appendChild(cerrarSesion);
-                let ul = document.createElement("ul");
-                let liIngreso = document.createElement("li");
-                let aIngreso = document.createElement("a");
-                let textoIngreso = document.createTextNode("Ingreso");
-                aIngreso.title = "Volver";
-                aIngreso.href = "../paginas/ingreso.html";
-                aIngreso.appendChild(textoIngreso);
-                liIngreso.appendChild(aIngreso);
-                ul.appendChild(liIngreso);
-                for (var i = 0; i < data.length; i++) {
-                    let li = document.createElement("li");
-                    let a = document.createElement("a");
-                    let texto = document.createTextNode(data[i].NombreQuest);
-                    a.title = data[i].NombreQuest;
-                    a.href = "../paginas/quest.html?Quest=" + data[i].IDQuest;
-                    a.appendChild(texto);
-                    li.appendChild(a);
-                    ul.appendChild(li);
-                }
-                lista.appendChild(ul);
+                crearMenu(data);
             },
             error: function(data) {
                 window.location.href = "../paginas/error.html"
@@ -305,4 +280,37 @@ function sRecuperarClave2() {
             async: true
         });
     };
+}
+
+function crearMenu(data) {
+    let lista = document.getElementById("navbardiv");
+    let cerrarSesion = document.createElement("input");
+    cerrarSesion.setAttribute("type", "button");
+    cerrarSesion.setAttribute("value", "Cerrar Sesion");
+    cerrarSesion.setAttribute("onclick", "cerrarSesion()");
+    lista.appendChild(cerrarSesion);
+    let ul = document.createElement("ul");
+    let liIngreso = document.createElement("li");
+    let aIngreso = document.createElement("a");
+    let textoIngreso = document.createTextNode("Ingreso");
+    aIngreso.title = "Volver";
+    aIngreso.href = "../paginas/ingreso.html";
+    aIngreso.appendChild(textoIngreso);
+    liIngreso.appendChild(aIngreso);
+    ul.appendChild(liIngreso);
+    for (var i = 0; i < data.length; i++) {
+        let li = document.createElement("li");
+        let a = document.createElement("a");
+        let texto = document.createTextNode(data[i].NombreQuest);
+        a.title = data[i].NombreQuest;
+        a.href = "../paginas/quest.html?Quest=" + data[i].IDQuest;
+        a.appendChild(texto);
+        li.appendChild(a);
+        ul.appendChild(li);
+    }
+    lista.appendChild(ul);
+}
+
+function armarPaginaQuest0(data) {
+
 }
