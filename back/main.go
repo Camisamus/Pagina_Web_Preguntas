@@ -34,6 +34,34 @@ var claveDeEncriptado *[32]byte
 type QuestMenu struct {
 	ID_Quest     string `json:"IDQuest"`
 	Nombre_Quest string `json:"NombreQuest"`
+	Categoria    string `json:"Categoria"`
+}
+
+//QuestDetalle, objeto para array que lista las quest activas
+type QuestDetalle struct {
+	ID_Quest      string        `json:"IDQuest"`
+	Representante Representante `json:"Representante"`
+	Equipos       []Equipo      `json:"Equipo"`
+	Quest         Quest         `json:"Quest"`
+}
+
+//Quest, estructura de la quest
+type Quest struct {
+	ID_Quest     string     `json:"IDQuest"`
+	Nombre_Quest string     `json:"NombreQuest"`
+	Premio       string     `json:"Premio"`
+	Preguntas    []Pregunta `json:"Preguntas"`
+	Categoria    string     `json:"Categoria"`
+	Estado       string     `json:"Estado"`
+	FechaInicio  string     `json:"FechaInicio"`
+	Ganador      string     `json:"Ganador"`
+}
+type Pregunta struct {
+	ID_Pregunta string `json:"IDPregunta"`
+	ID_Quest    string `json:"IDQuest"`
+	Pista       string `json:"pista"`
+	Pregunta    string `json:"Pregunta"`
+	Respuesta   string `json:"Respuesta"`
 }
 
 //Sesion, objeto para manejar sesiones
@@ -55,14 +83,18 @@ type Cuenta struct {
 //Representeante, Usuario dueño de la cuenta y Representante de los equipos
 type Representante struct {
 	ID_Representante     string `json:"ID_Representante"`
-	Nombre_Representante string `json:"NombreQuest"`
+	Nombre_Representante string `json:"NombreRepresentante"`
+	Email_Representante  string `json:"EmailRepresentante"`
 }
 
 //Equipo, Equipoque participa en una quest
 type Equipo struct {
-	ID_Equipo     string `json:"IDEquipo"`
-	ID_Quest      string `json:"IDQuest"`
-	Nombre_Equipo string `json:"NombreQuest"`
+	ID_Equipo          string    `json:"IDEquipo"`
+	ID_Quest           string    `json:"IDQuest"`
+	Nombre_Equipo      string    `json:"NombreEquipo"`
+	Rut_Respondable    string    `json:"RutRespondable"`
+	Nombre_Respondable string    `json:"NombreRespondable"`
+	Miembros_Equipo    []Miembro `json:"Miembros_Equipo"`
 }
 
 //Miembro,de un equipo
@@ -112,15 +144,19 @@ func cargarQestActivas() {
 	for {
 		log.Println("Cargando Pendientes")
 		tab, err := bd.Query("select Q.ID_QUEST, Q.NOMBRE_QUEST  from QUEST Q where Q.ESTADO_QUEST = ?", "A")
-		defer tab.Close()
 		if err != nil {
 			log.Println("Errores al marcar Solicitudes: " + err.Error())
 			return
 		}
+		defer tab.Close()
 		aux1 := []QuestMenu{}
 		for tab.Next() {
 			aux2 := QuestMenu{}
 			err = tab.Scan(&aux2.ID_Quest, &aux2.Nombre_Quest)
+			if err != nil {
+				log.Println("Error: " + err.Error())
+				return
+			}
 			aux1 = append(aux1, aux2)
 		}
 		questActivas = aux1
@@ -166,7 +202,7 @@ func main() {
 	r.HandleFunc("/RecuperarClave1", handlerRecuperarClave1).Methods("POST") //1.0
 	r.HandleFunc("/RecuperarClave2", handlerRecuperarClave2).Methods("POST") //1.0
 	r.HandleFunc("/Quests", handlerQuest).Methods("POST")                    //1.0
-	r.HandleFunc("/Quest", handlerQuest).Methods("POST")                     //1.0
+	r.HandleFunc("/Quest", handlerQuestDetalle).Methods("POST")              //1.0
 	r.HandleFunc("/Inscribirse", handlerQuest).Methods("POST")               //1.0
 	r.HandleFunc("/EnviarRespuesta", handlerQuest).Methods("POST")           //1.0
 
@@ -292,6 +328,15 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 			Path:     "/CerrarSesion",
 		}
 		http.SetCookie(w, c2)
+		c3 := &http.Cookie{
+			Name:     param[1],
+			Value:    sID.String(),
+			SameSite: http.SameSiteNoneMode,
+			Secure:   true,
+			Expires:  time.Now().Add(time.Hour + 2),
+			Path:     "/Quest",
+		}
+		http.SetCookie(w, c3)
 		ses := Sesion{}
 		ses.Sesion = resultado.Email
 		ses.TimeStamp = time.Now()
@@ -415,6 +460,7 @@ func handlerRecuperarClave2(w http.ResponseWriter, r *http.Request) {
 	w.Write(respuesta)
 
 }
+
 func handlerQuest(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie(param[1])
 	if err != nil {
@@ -428,6 +474,72 @@ func handlerQuest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respuesta, err := json.Marshal(questActivas)
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+
+}
+
+func handlerQuestDetalle(w http.ResponseWriter, r *http.Request) {
+	questDetalle := QuestDetalle{}
+	err := json.NewDecoder(r.Body).Decode(&questDetalle)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	c, err := r.Cookie(param[1])
+	if err != nil {
+		handlerSesionCerrada(w, r)
+		return
+	}
+	sesion, ok := dbSesiones[c.Value]
+	if !ok {
+		handlerSesionCerrada(w, r)
+		return
+	}
+	usuario, ok := dbUsuarios[sesion.Sesion]
+	if !ok {
+		handlerSesionCerrada(w, r)
+		return
+	}
+	questDetalle.Representante = Representante{
+		ID_Representante:     usuario.IDCuenta,
+		Nombre_Representante: usuario.NombreCuenta,
+		Email_Representante:  usuario.Email,
+	}
+	equiposEncontrados, err := buscarEquiposActivos(questDetalle.ID_Quest, questDetalle.Representante.ID_Representante)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	if len(equiposEncontrados) < 1 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("{}"))
+		return
+	}
+	questSeleccionada, err := buscarQuest(questDetalle.ID_Quest)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	questSeleccionada.Preguntas = limpiaRespueestas(questSeleccionada.Preguntas)
+	questDetalle.Equipos = equiposEncontrados
+	questDetalle.Quest = questSeleccionada
+	respuesta, err := json.Marshal(questDetalle)
 	if err != nil {
 		log.Println("Error: " + err.Error())
 		w.Header().Set("Content-Type", "application/json")
@@ -561,6 +673,11 @@ func recuperarClave1(cuenta Cuenta) error {
 		}
 	}
 	err = db1.Commit()
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return err
+	}
 	if encontrado {
 		sID, _ := uuid.NewV4()
 		dbClavesEnproceso[sID.String()] = CuentaEnEspera{
@@ -597,8 +714,175 @@ func recuperarClave2(nuevasClaves Cuenta, cuentaAcutal Cuenta) error {
 		return err
 	}
 	err = db1.Commit()
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return err
+	}
 
 	return nil
+}
+
+func buscarEquiposActivos(ID_Quest string, Representante string) ([]Equipo, error) {
+	equiposEncontrados := []Equipo{}
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return equiposEncontrados, err
+	}
+	tab1, err := db1.Query("SELECT e.ID_EQUIPO, e.NOMBRE_EQUIPO, e.RUT_RESPONSABLE, e.NOMBRE_RESPONSABLE FROM equipo e WHERE e.ID_QUEST = ? AND e.ID_REPRESENTANTE = ?", ID_Quest, Representante)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return equiposEncontrados, err
+	}
+	defer tab1.Close()
+	for tab1.Next() {
+		equipo := Equipo{
+			ID_Quest: ID_Quest,
+		}
+		err = tab1.Scan(&equipo.ID_Equipo, &equipo.Nombre_Equipo, &equipo.Rut_Respondable, &equipo.Nombre_Respondable)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return equiposEncontrados, err
+		}
+		miembros, err := buscarMiembro(equipo.ID_Equipo)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return equiposEncontrados, err
+		}
+		equipo.Miembros_Equipo = miembros
+		equiposEncontrados = append(equiposEncontrados, equipo)
+	}
+	err = db1.Commit()
+
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return equiposEncontrados, err
+	}
+
+	return equiposEncontrados, nil
+}
+
+func buscarMiembro(ID_Equipo string) ([]Miembro, error) {
+	miembros := []Miembro{}
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return miembros, err
+	}
+	tab1, err := db1.Query("SELECT m.ID_MIEMBRO, m.NOMBRE_MIEMBRO, m.Rut_MIEMBRO FROM miembro m WHERE m.ID_Equipo = ?", ID_Equipo)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return miembros, err
+	}
+	defer tab1.Close()
+	for tab1.Next() {
+		miembro := Miembro{
+			ID_Equipo: ID_Equipo,
+		}
+		err = tab1.Scan(&miembro.ID_Miembro, &miembro.Nombre_Miembro, &miembro.Rut_Miembro)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return miembros, err
+		}
+		miembros = append(miembros, miembro)
+	}
+	err = db1.Commit()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return miembros, err
+	}
+	return miembros, nil
+}
+
+func buscarQuest(ID_Quest string) (Quest, error) {
+	quest := Quest{
+		ID_Quest: ID_Quest,
+	}
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return quest, err
+	}
+	tab1, err := db1.Query("SELECT e.NOMBRE_QUEST, e.ESTADO_QUEST, e.FECHA_INICIO, e.PREMIO, e.GANADOR, e.CATEGORIA FROM quest e WHERE e.ID_QUEST = ? ", ID_Quest)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return quest, err
+	}
+	defer tab1.Close()
+	for tab1.Next() {
+		err = tab1.Scan(&quest.Nombre_Quest, &quest.Estado, &quest.FechaInicio, &quest.Premio, &quest.Ganador, &quest.Categoria)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return quest, err
+		}
+		preguntas, err := buscarPreguntas(quest.ID_Quest)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return quest, err
+		}
+		quest.Preguntas = preguntas
+	}
+	err = db1.Commit()
+
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return quest, err
+	}
+
+	return quest, nil
+}
+
+func buscarPreguntas(ID_Quest string) ([]Pregunta, error) {
+	preguntas := []Pregunta{}
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return preguntas, err
+	}
+	tab1, err := db1.Query("SELECT ID_PREGUNTA, PISTA, PREGUNTA, RESPUESTA FROM pregunta WHERE ID_Quest = ?", ID_Quest)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return preguntas, err
+	}
+	defer tab1.Close()
+	for tab1.Next() {
+		pregunta := Pregunta{
+			ID_Quest: ID_Quest,
+		}
+		err = tab1.Scan(&pregunta.ID_Pregunta, &pregunta.Pista, &pregunta.Pregunta, &pregunta.Respuesta)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return preguntas, err
+		}
+		preguntas = append(preguntas, pregunta)
+	}
+	err = db1.Commit()
+
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return preguntas, err
+	}
+	return preguntas, nil
+}
+
+func limpiaRespueestas(preguntas []Pregunta) []Pregunta {
+	preguntasn := []Pregunta{}
+	for _, element := range preguntas {
+		element.Respuesta = ""
+		preguntasn = append(preguntasn, element)
+	}
+	return preguntasn
 }
 
 //_____________________________funciones crypto------------------
@@ -610,7 +894,7 @@ func crearclave() *[32]byte { //*bytes.Buffer { //
 		w.WriteByte(param[9][0])
 	}
 	nk := [32]byte{}
-	newkey := []byte(w.String())
+	newkey := w.Bytes()
 	copy(nk[:], newkey)
 	return &nk
 }

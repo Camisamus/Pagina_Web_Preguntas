@@ -16,11 +16,13 @@ const Inicios = {
     "uest.html": () => {
         var quests = new sQuests();
         quests.consultar();
+        var quest = new sQuestsDetalle();
+        quest.consultar();
     },
 
 };
 $(document).ready(function() {
-    return Inicios[location.href.slice(-9)]();
+    return Inicios[window.location.href.replace(window.location.search.substring(0), "").slice(-9)]();
 });
 
 function CrearCuenta() {
@@ -76,8 +78,65 @@ function sQuests() {
             data: "",
             method: 'POST',
             success: function(data) {
-                if (data.Sesion == "Cerrada") { window.location.href = "../paginas/inicio.html" }
+                if (data.Sesion == "Cerrada") { window.location.href = "../paginas/inicio.html"; return; }
+                let lista = document.getElementById("navbardiv");
+                let cerrarSesion = document.createElement("input");
+                cerrarSesion.setAttribute("type", "button");
+                cerrarSesion.setAttribute("value", "Cerrar Sesion");
+                cerrarSesion.setAttribute("onclick", "cerrarSesion()");
+                lista.appendChild(cerrarSesion);
+                let ul = document.createElement("ul");
+                let liIngreso = document.createElement("li");
+                let aIngreso = document.createElement("a");
+                let textoIngreso = document.createTextNode("Ingreso");
+                aIngreso.title = "Volver";
+                aIngreso.href = "../paginas/ingreso.html";
+                aIngreso.appendChild(textoIngreso);
+                liIngreso.appendChild(aIngreso);
+                ul.appendChild(liIngreso);
+                for (var i = 0; i < data.length; i++) {
+                    let li = document.createElement("li");
+                    let a = document.createElement("a");
+                    let texto = document.createTextNode(data[i].NombreQuest);
+                    a.title = data[i].NombreQuest;
+                    a.href = "../paginas/quest.html?Quest=" + data[i].IDQuest;
+                    a.appendChild(texto);
+                    li.appendChild(a);
+                    ul.appendChild(li);
+                }
+                lista.appendChild(ul);
+            },
+            error: function(data) {
+                window.location.href = "../paginas/error.html"
+            },
+            async: true
+        });
+    };
+}
 
+function sQuestsDetalle() {
+
+    this.source = 'http://localhost:8090/Quest';
+
+    this.callback = null;
+    this.extra = null;
+
+    this.consultar = function() {
+        var data = ""
+        var that = this;
+
+        $.ajax({
+            url: this.source,
+            xhrFields: {
+                withCredentials: true,
+                credentials: 'include'
+            },
+            data: JSON.stringify({
+                IDQuest: urlParams.get('Quest'),
+            }),
+            method: 'POST',
+            success: function(data) {
+                console.log(data);
             },
             error: function(data) {
                 window.location.href = "../paginas/error.html"
