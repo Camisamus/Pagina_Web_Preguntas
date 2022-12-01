@@ -112,6 +112,7 @@ function sQuestsDetalle() {
             method: 'POST',
             success: function(data) {
                 console.log(data);
+                armarPaginaQuest0(data)
             },
             error: function(data) {
                 window.location.href = "../paginas/error.html"
@@ -312,5 +313,41 @@ function crearMenu(data) {
 }
 
 function armarPaginaQuest0(data) {
+    let bodydiv = document.getElementById("contentdiv");
+    let divDatos = llebarDivDatos(data);
+    let divEquipos = llebarDivEquipos(data);
+    let divpreguntas = llebarDivpreguntas(data);
 
+
+
+    bodydiv.appendChild(divDatos);
+    bodydiv.appendChild(divEquipos);
+    bodydiv.appendChild(divpreguntas);
+}
+
+function llebarDivDatos(data) {
+    let divDatos = document.createElement("div");
+    let titulo = document.createElement("h3");
+    text = document.createTextNode(data.Quest.NombreQuest);
+    titulo.appendChild(text);
+
+    let btninscribir = document.createElement("input");
+    btninscribir.setAttribute("type", "button")
+    btninscribir.setAttribute("value", "Inscribir")
+    btninscribir.setAttribute("onclick", "inscribir()")
+
+
+    divDatos.appendChild(titulo);
+    divDatos.appendChild(btninscribir);
+    return divDatos
+}
+
+function llebarDivEquipos(data) {
+    let divEquipos = document.createElement("div");
+    return divEquipos
+}
+
+function llebarDivpreguntas(data) {
+    let divpreguntas = document.createElement("div");
+    return divpreguntas
 }
