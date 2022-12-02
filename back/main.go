@@ -27,7 +27,9 @@ var param []string
 var questActivas []QuestMenu
 var dbSesiones = map[string]Sesion{}                // session ID, user ID
 var dbUsuarios = map[string]Cuenta{}                //
+var dbIntentos = map[string]Intento{}               //
 var dbClavesEnproceso = map[string]CuentaEnEspera{} //
+var dbQuestCeradas = map[string]bool{}
 var claveDeEncriptado *[32]byte
 
 //QuestMenu, objeto para array que lista las quest activas
@@ -59,7 +61,7 @@ type Quest struct {
 type Pregunta struct {
 	ID_Pregunta string `json:"IDPregunta"`
 	ID_Quest    string `json:"IDQuest"`
-	Pista       string `json:"pista"`
+	Pista       string `json:"Pista"`
 	Pregunta    string `json:"Pregunta"`
 	Respuesta   string `json:"Respuesta"`
 }
@@ -109,6 +111,23 @@ type Miembro struct {
 type CuentaEnEspera struct {
 	Cuenta    Cuenta
 	TimeStamp time.Time
+}
+
+//Intento
+type Intento struct {
+	Hora       time.Time    `json:"HoraInivcio"`
+	Respuestas []Respuestas `json:"Respuestas"`
+	ID_Equipo  string       `json:"IDEquipo"`
+	ID_Quest   string       `json:"IDQuest"`
+}
+
+//Respuestas
+type Respuestas struct {
+	Hora        time.Time `json:"HoraInivcio"`
+	ID_Pregunta string    `json:"IDPregunta"`
+	ID_Quest    string    `json:"IDQuest"`
+	Pregunta    Pregunta  `json:"Pregunta"`
+	Correcta    bool      `json:"Correcta"`
 }
 
 func init() {
@@ -191,6 +210,24 @@ func clavesNoRecuperadas() {
 	}
 }
 
+func bajarIntento(intento string) {
+	time.Sleep(time.Minute * 20)
+	delete(dbIntentos, intento)
+}
+
+func EliminatIntentos() {
+	for {
+		log.Println("Eliminando Claves No Recuperadas")
+		timenow := time.Now().Add(time.Minute * -20)
+		for key, element := range dbIntentos {
+			if element.Hora.Before(timenow) {
+				delete(dbIntentos, key)
+			}
+		}
+		time.Sleep(time.Minute * 20)
+	}
+}
+
 //____________________________________________________________________________________________
 func main() {
 	r := mux.NewRouter().StrictSlash(false)
@@ -204,7 +241,7 @@ func main() {
 	r.HandleFunc("/Quests", handlerQuest).Methods("POST")                    //1.0
 	r.HandleFunc("/Quest", handlerQuestDetalle).Methods("POST")              //1.0
 	r.HandleFunc("/Inscribirse", handlerQuest).Methods("POST")               //1.0
-	r.HandleFunc("/EnviarRespuesta", handlerQuest).Methods("POST")           //1.0
+	r.HandleFunc("/EnviarRespuesta", handlerRespuesta).Methods("POST")       //1.0
 
 	server := http.Server{
 		Addr:           param[0],
@@ -550,7 +587,128 @@ func handlerQuestDetalle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(respuesta)
+}
 
+func handlerRespuesta(w http.ResponseWriter, r *http.Request) {
+	nuevaRespuesta := Intento{}
+	err := json.NewDecoder(r.Body).Decode(&nuevaRespuesta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	_, ok := dbQuestCeradas[nuevaRespuesta.ID_Quest]
+	if ok {
+		respuesta, err := json.Marshal("{ID_Equipo: Tarde}")
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(nil)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respuesta)
+
+	}
+	resultado, err := revisarRespuesta(nuevaRespuesta)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	respuesta, err := json.Marshal(resultado)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+}
+
+func revisarRespuesta(respuesta Intento) (Intento, error) {
+	llave := respuesta.ID_Quest + "_" + respuesta.ID_Equipo
+	actual, ok := dbIntentos[llave]
+	if !ok {
+		actual = Intento{
+			Hora:       time.Now(),
+			Respuestas: []Respuestas{},
+			ID_Equipo:  respuesta.ID_Equipo,
+			ID_Quest:   respuesta.ID_Quest,
+		}
+	}
+	for _, element := range actual.Respuestas {
+		if respuesta.Respuestas[0].ID_Pregunta == element.ID_Pregunta {
+			actual.ID_Equipo = "Aun no se permite volver a responder"
+			return actual, nil
+		}
+	}
+	preguntas, err := buscarPreguntas(respuesta.ID_Quest)
+	if err != nil {
+		return actual, err
+	}
+	var pregunta = Pregunta{}
+	for _, element := range preguntas {
+		if respuesta.Respuestas[0].ID_Pregunta == element.ID_Pregunta {
+			pregunta = element
+		}
+	}
+	var nuevaRespuesta = Respuestas{
+		Hora:        time.Now(),
+		ID_Pregunta: respuesta.Respuestas[0].ID_Pregunta,
+		ID_Quest:    respuesta.ID_Quest,
+		Correcta:    (pregunta.Respuesta == respuesta.Respuestas[0].Pregunta.Respuesta),
+	}
+	actual.Respuestas = append(actual.Respuestas, nuevaRespuesta)
+	respuesta.Respuestas[0].Correcta = nuevaRespuesta.Correcta
+	if len(actual.Respuestas) == len(preguntas) {
+		ganador := true
+		for _, element := range actual.Respuestas {
+			if !element.Correcta {
+				ganador = false
+			}
+		}
+		if ganador {
+			dbQuestCeradas[respuesta.ID_Quest] = true
+			var newQuestActivas []QuestMenu
+			for _, element := range questActivas {
+				if element.ID_Quest != respuesta.ID_Quest {
+					newQuestActivas = append(newQuestActivas, element)
+				}
+			}
+			questActivas = newQuestActivas
+			err := declararGanador(respuesta.ID_Equipo, respuesta.ID_Quest)
+			respuesta.ID_Equipo = "Gano"
+			if err != nil {
+				log.Println("Equipo Ganador No Registrado equipo : " + respuesta.ID_Equipo + "  hora:  " + time.Now().String())
+				return respuesta, err
+			}
+		}
+	}
+	dbIntentos[llave] = actual
+	go bajarIntento(llave)
+	return respuesta, nil
+}
+func declararGanador(equipo string, ID_Quest string) error {
+
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	_, err = db1.Query("UPDATE quest set ESTADO_QUEST='F', GANADOR = ? where  ID_QUEST = ?;", equipo, ID_Quest)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	db1.Commit()
+	return nil
 }
 func CrearCuenta(nuevaCuenta Cuenta) (Cuenta, error) {
 	var cuentaCreada = Cuenta{Estado: "False"}
