@@ -466,9 +466,33 @@ function llebarDivpreguntas(data) {
     }
     return divpreguntas
 }
+numeroDeMiembros = 0
 
 function inscribir() {
     alert("inscribir")
+    numeroDeMiembros = 0
+    divInscribirse0 = document.createElement("div");
+    divinscribirse0.setAttribute("id", "divinscribirse0")
+    divInscribirse1 = document.createElement("div");
+    divInscribirse1.setAttribute("class", "inputter");
+    inputRut = document.createElement("input");
+    inputNombre = document.createElement("input");
+    botonAgregarMiembro.setAttribute("type", "button")
+    botonAgregarMiembro.setAttribute("value", "Agregar Miembro")
+    botonAgregarMiembro.setAttribute("onclick", "agregarCampoMiembro()")
+
+}
+
+function agregarCampoMiembro() {
+    numeroDeMiembros++
+    divinscribirse0 = document.getElementById("divinscribirse0")
+    divNuevoMiembro = document.createElement("div");
+    divNuevoMiembro.setAttribute("class", "inputter");
+    inputRut = document.createElement("input");
+    inputNombre = document.createElement("input");
+
+
+    divInscribirse0.appendChild(divNuevoMiembro)
 }
 
 function enviarRespuesta(IDPregunta) {
