@@ -490,8 +490,6 @@ function agregarCampoMiembro() {
     divNuevoMiembro.setAttribute("class", "inputter");
     inputRut = document.createElement("input");
     inputNombre = document.createElement("input");
-
-
     divInscribirse0.appendChild(divNuevoMiembro)
 }
 
