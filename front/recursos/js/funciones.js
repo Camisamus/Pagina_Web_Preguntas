@@ -488,7 +488,9 @@ function agregarCampoMiembro() {
     divinscribirse0 = document.getElementById("divinscribirse0")
     divNuevoMiembro = document.createElement("div");
     divNuevoMiembro.setAttribute("class", "inputter");
+    divNuevoMiembro.appendChild(document.createTextNode("Rut Miembro"))
     inputRut = document.createElement("input");
+    divNuevoMiembro.appendChild(document.createTextNode("Nombre Miembro"))
     inputNombre = document.createElement("input");
     divInscribirse0.appendChild(divNuevoMiembro)
 }
