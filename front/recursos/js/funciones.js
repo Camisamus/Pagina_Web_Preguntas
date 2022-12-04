@@ -485,17 +485,19 @@ function inscribir() {
 
 function agregarCampoMiembro() {
     numeroDeMiembros++
-    divinscribirse0 = document.getElementById("divinscribirse0")
+    divinscribirse0 = document.getElementById("divinscribirse0");
     divNuevoMiembro = document.createElement("div");
     divNuevoMiembro.setAttribute("class", "inputter");
-    divNuevoMiembro.appendChild(document.createTextNode("Rut Miembro"))
+    divNuevoMiembro.appendChild(document.createTextNode("Rut Miembro"));
     inputRut = document.createElement("input");
-    inputRut.setAttribute("type", "text")
+    inputRut.setAttribute("type", "text");
     inputRut.setAttribute("id", "inputRutMiembro_" + numeroDeMiembros)
-    divNuevoMiembro.appendChild(document.createTextNode("Nombre Miembro"))
+    divNuevoMiembro.appendChild(inputRut);
+    divNuevoMiembro.appendChild(document.createTextNode("Nombre Miembro"));
     inputNombre = document.createElement("input");
     inputNombre.setAttribute("type", "text")
     inputNombre.setAttribute("id", "inputNombreMiembro_" + numeroDeMiembros)
+    divNuevoMiembro.appendChild(inputNombre);
 
     divInscribirse0.appendChild(divNuevoMiembro)
 }
