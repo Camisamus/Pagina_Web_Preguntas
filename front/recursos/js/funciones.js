@@ -490,8 +490,13 @@ function agregarCampoMiembro() {
     divNuevoMiembro.setAttribute("class", "inputter");
     divNuevoMiembro.appendChild(document.createTextNode("Rut Miembro"))
     inputRut = document.createElement("input");
+    inputRut.setAttribute("type", "text")
+    inputRut.setAttribute("id", "inputRutMiembro_" + numeroDeMiembros)
     divNuevoMiembro.appendChild(document.createTextNode("Nombre Miembro"))
     inputNombre = document.createElement("input");
+    inputNombre.setAttribute("type", "text")
+    inputNombre.setAttribute("id", "inputNombreMiembro_" + numeroDeMiembros)
+
     divInscribirse0.appendChild(divNuevoMiembro)
 }
 
