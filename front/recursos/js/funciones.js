@@ -468,38 +468,80 @@ function llebarDivpreguntas(data) {
 }
 numeroDeMiembros = 0
 
-function inscribir() {
-    alert("inscribir")
+async function inscribir() {
     numeroDeMiembros = 0
+
+
+
+    fondomodal = document.createElement("div");
+    fondomodal.setAttribute("class", "fondoModal");
+    fondomodal.setAttribute("id", "fondoModal");
+    fondomodal.setAttribute("onclick", "cerrarModal()");
     divInscribirse0 = document.createElement("div");
-    divinscribirse0.setAttribute("id", "divinscribirse0")
+    divInscribirse0.setAttribute("id", "divinscribirse0");
+    divInscribirse0.setAttribute("style", "    background-color: rgba(255, 255, 255, 1);    margin: 15% auto;    border-radius: 10px;    padding: 15px;    border: 1px solid #888;    width: 80%;    min-width: 400px;    max-width: 600px;    color: black;");
+    divInscribirse0.setAttribute("onclick", "event.stopPropagation();");
     divInscribirse1 = document.createElement("div");
     divInscribirse1.setAttribute("class", "inputter");
+    divInscribirse2 = document.createElement("div");
+    divInscribirse2.setAttribute("class", "inputter");
     inputRut = document.createElement("input");
+    inputRut.setAttribute("id", "inputRutResponsable")
+    inputRut.setAttribute("style", "margin: 10px");
     inputNombre = document.createElement("input");
-    botonAgregarMiembro.setAttribute("type", "button")
-    botonAgregarMiembro.setAttribute("value", "Agregar Miembro")
-    botonAgregarMiembro.setAttribute("onclick", "agregarCampoMiembro()")
+    inputNombre.setAttribute("id", "inputNombreResponsable")
+    inputNombre.setAttribute("style", "margin: 10px");
+    botonAgregarMiembro = document.createElement("input");
+    botonAgregarMiembro.setAttribute("type", "button");
+    botonAgregarMiembro.setAttribute("style", "margin: 10px");
+    botonAgregarMiembro.setAttribute("value", "Agregar Miembro");
+    botonAgregarMiembro.setAttribute("onclick", "agregarCampoMiembro()");
+    botonEnviarEquipo = document.createElement("input");
+    botonEnviarEquipo.setAttribute("type", "button");
+    botonEnviarEquipo.setAttribute("style", "margin: 10px");
+    botonEnviarEquipo.setAttribute("value", "Enviar Equipo");
+    botonEnviarEquipo.setAttribute("onclick", "EnviarEquipo()");
+    divInscribirse0.appendChild(divInscribirse1);
+    divInscribirse1.appendChild(document.createTextNode("Rut Responsable"));
+    divInscribirse1.appendChild(inputRut);
+    divInscribirse1.appendChild(document.createElement("br"));
+    divInscribirse1.appendChild(document.createTextNode("Nombre Responsable"));
+    divInscribirse1.appendChild(inputNombre);
+    divInscribirse0.appendChild(divInscribirse2);
+    divInscribirse2.appendChild(botonAgregarMiembro);
+    divInscribirse2.appendChild(botonEnviarEquipo);
+    fondomodal.appendChild(divInscribirse0);
+
+    document.body.appendChild(fondomodal);
 
 }
 
 function agregarCampoMiembro() {
     numeroDeMiembros++
-    divinscribirse0 = document.getElementById("divinscribirse0");
+    divInscribirse0 = document.getElementById("divinscribirse0");
     divNuevoMiembro = document.createElement("div");
     divNuevoMiembro.setAttribute("class", "inputter");
     divNuevoMiembro.appendChild(document.createTextNode("Rut Miembro"));
     inputRut = document.createElement("input");
     inputRut.setAttribute("type", "text");
     inputRut.setAttribute("id", "inputRutMiembro_" + numeroDeMiembros)
+    inputRut.setAttribute("style", "margin: 10px");
     divNuevoMiembro.appendChild(inputRut);
+    divNuevoMiembro.appendChild(document.createElement("br"));
     divNuevoMiembro.appendChild(document.createTextNode("Nombre Miembro"));
     inputNombre = document.createElement("input");
     inputNombre.setAttribute("type", "text")
     inputNombre.setAttribute("id", "inputNombreMiembro_" + numeroDeMiembros)
+    inputNombre.setAttribute("style", "margin: 10px");
     divNuevoMiembro.appendChild(inputNombre);
 
     divInscribirse0.appendChild(divNuevoMiembro)
+}
+
+function cerrarModal() {
+    modal = document.getElementById("fondoModal")
+    modal.innerHTML = ""
+    modal.remove();
 }
 
 function enviarRespuesta(IDPregunta) {
