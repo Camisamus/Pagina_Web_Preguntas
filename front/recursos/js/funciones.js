@@ -286,6 +286,56 @@ function sRecuperarClave2() {
     };
 }
 
+function sInscribirEquipo() {
+
+    this.source = 'http://localhost:8090/Inscribirse';
+
+    this.callback = null;
+    this.extra = null;
+
+    this.consultar = function(p) {
+        var data = ""
+        var that = this;
+
+        $.ajax({
+            url: this.source,
+            data: JSON.stringify({
+                Respuestas: [{
+                    IDPregunta: "" + p,
+                    IDQuest: urlParams.get('Quest'),
+                    Pregunta: {
+                        IDPregunta: "" + p,
+                        Respuesta: $("#Respuesta" + p).val(),
+                    },
+                }],
+                IDEquipo: $("#inputEquipos").val(),
+                IDQuest: urlParams.get('Quest'),
+            }),
+            method: 'POST',
+            success: function(data) {
+                if (data.IDEquipo == "Gano") {
+                    alert("GANASTE!!!")
+                    return
+                }
+                if (data.IDEquipo == "Aun no se permite volver a responder") {
+                    alert(data.IDEquipo)
+                    return
+                }
+                if (!data.Respuestas[0].Correcta) {
+                    partir();
+                    tiempo();
+                    alert("Respuesta Incorrecta. siquiente oportunidad en 20 minutos.")
+                    return
+                }
+            },
+            error: function(data) {
+                window.location.href = "../paginas/error.html"
+            },
+            async: true
+        });
+    };
+}
+
 function sRespuesta() {
 
     this.source = 'http://localhost:8090/EnviarRespuesta';
