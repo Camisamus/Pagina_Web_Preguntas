@@ -301,23 +301,10 @@ function sInscribirEquipo() {
             url: this.source,
             data: armarEquipo(),
             method: 'POST',
-            success: function(data) {
-                if (data.IDEquipo == "Gano") {
-                    alert("GANASTE!!!")
-                    return
-                }
-                if (data.IDEquipo == "Aun no se permite volver a responder") {
-                    alert(data.IDEquipo)
-                    return
-                }
-                if (!data.Respuestas[0].Correcta) {
-                    partir();
-                    tiempo();
-                    alert("Respuesta Incorrecta. siquiente oportunidad en 20 minutos.")
-                    return
-                }
+            success: function() {
+                window.location.reload()
             },
-            error: function(data) {
+            error: function() {
                 window.location.href = "../paginas/error.html"
             },
             async: true
@@ -477,9 +464,27 @@ function llebarDivEquipos(data) {
 }
 
 function armarEquipo() {
-    aux = {}
+    aux = {
+        IDQuest: urlParams.get('Quest'),
+        NombreEquipo: $("#inputNombreEquipo").val(),
+        RutRespondable: $("#inputRutResponsable").val(),
+        NombreRespondable: $("#inputNombreResponsable").val(),
+        Miembros_Equipo: armarMiembros()
+    }
     return JSON.stringify(aux)
 }
+
+function armarMiembros() {
+    miembros = [];
+    for (i = 1; i <= numeroDeMiembros; i++) {
+        miembro = {
+            NombreMiembro: $("#inputNombreMiembro_" + i).val(),
+            RutMiembro: $("#inputRutMiembro_" + i).val(),
+        }
+    }
+    return miembros
+}
+
 
 function llebarDivpreguntas(data) {
     let divpreguntas = document.createElement("div");
@@ -529,6 +534,9 @@ async function inscribir() {
     divInscribirse1.setAttribute("class", "inputter");
     divInscribirse2 = document.createElement("div");
     divInscribirse2.setAttribute("class", "inputter");
+    nombreEquipo = document.createElement("input");
+    nombreEquipo.setAttribute("id", "inputNombreEquipo")
+    nombreEquipo.setAttribute("style", "margin: 10px");
     inputRut = document.createElement("input");
     inputRut.setAttribute("id", "inputRutResponsable")
     inputRut.setAttribute("style", "margin: 10px");
@@ -546,6 +554,9 @@ async function inscribir() {
     botonEnviarEquipo.setAttribute("value", "Enviar Equipo");
     botonEnviarEquipo.setAttribute("onclick", "EnviarEquipo()");
     divInscribirse0.appendChild(divInscribirse1);
+    divInscribirse1.appendChild(document.createTextNode("Nombre Equipo"));
+    divInscribirse1.appendChild(nombreEquipo);
+    divInscribirse1.appendChild(document.createElement("br"));
     divInscribirse1.appendChild(document.createTextNode("Rut Responsable"));
     divInscribirse1.appendChild(inputRut);
     divInscribirse1.appendChild(document.createElement("br"));
