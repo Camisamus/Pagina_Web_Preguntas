@@ -299,18 +299,7 @@ function sInscribirEquipo() {
 
         $.ajax({
             url: this.source,
-            data: JSON.stringify({
-                Respuestas: [{
-                    IDPregunta: "" + p,
-                    IDQuest: urlParams.get('Quest'),
-                    Pregunta: {
-                        IDPregunta: "" + p,
-                        Respuesta: $("#Respuesta" + p).val(),
-                    },
-                }],
-                IDEquipo: $("#inputEquipos").val(),
-                IDQuest: urlParams.get('Quest'),
-            }),
+            data: armarEquipo(),
             method: 'POST',
             success: function(data) {
                 if (data.IDEquipo == "Gano") {
@@ -485,6 +474,11 @@ function llebarDivEquipos(data) {
         divEquipos.appendChild(divEquipo0);
     }
     return divEquipos
+}
+
+function armarEquipo() {
+    aux = {}
+    return JSON.stringify(aux)
 }
 
 function llebarDivpreguntas(data) {
