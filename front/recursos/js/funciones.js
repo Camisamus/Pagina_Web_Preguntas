@@ -299,6 +299,9 @@ function sInscribirEquipo() {
 
         $.ajax({
             url: this.source,
+            xhrFields: {
+                withCredentials: true,
+            },
             data: armarEquipo(),
             method: 'POST',
             success: function() {
@@ -481,6 +484,7 @@ function armarMiembros() {
             NombreMiembro: $("#inputNombreMiembro_" + i).val(),
             RutMiembro: $("#inputRutMiembro_" + i).val(),
         }
+        miembros.push(miembro);
     }
     return miembros
 }
@@ -515,6 +519,12 @@ function llebarDivpreguntas(data) {
     }
     return divpreguntas
 }
+
+function EnviarEquipo() {
+    var inscribirEquipo = new sInscribirEquipo;
+    inscribirEquipo.consultar();
+}
+
 numeroDeMiembros = 0
 
 async function inscribir() {

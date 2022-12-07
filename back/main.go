@@ -93,6 +93,7 @@ type Representante struct {
 type Equipo struct {
 	ID_Equipo          string    `json:"IDEquipo"`
 	ID_Quest           string    `json:"IDQuest"`
+	ID_Representante   string    `json:"ID_Representante"`
 	Nombre_Equipo      string    `json:"NombreEquipo"`
 	Rut_Respondable    string    `json:"RutRespondable"`
 	Nombre_Respondable string    `json:"NombreRespondable"`
@@ -240,7 +241,7 @@ func main() {
 	r.HandleFunc("/RecuperarClave2", handlerRecuperarClave2).Methods("POST") //1.0
 	r.HandleFunc("/Quests", handlerQuest).Methods("POST")                    //1.0
 	r.HandleFunc("/Quest", handlerQuestDetalle).Methods("POST")              //1.0
-	r.HandleFunc("/Inscribirse", handlerQuest).Methods("POST")               //1.0
+	r.HandleFunc("/Inscribirse", handlerInscribirse).Methods("POST")         //1.0
 	r.HandleFunc("/EnviarRespuesta", handlerRespuesta).Methods("POST")       //1.0
 
 	server := http.Server{
@@ -374,6 +375,15 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 			Path:     "/Quest",
 		}
 		http.SetCookie(w, c3)
+		c4 := &http.Cookie{
+			Name:     param[1],
+			Value:    sID.String(),
+			SameSite: http.SameSiteNoneMode,
+			Secure:   true,
+			Expires:  time.Now().Add(time.Hour + 2),
+			Path:     "/Inscribirse",
+		}
+		http.SetCookie(w, c4)
 		ses := Sesion{}
 		ses.Sesion = resultado.Email
 		ses.TimeStamp = time.Now()
@@ -589,6 +599,50 @@ func handlerQuestDetalle(w http.ResponseWriter, r *http.Request) {
 	w.Write(respuesta)
 }
 
+func handlerInscribirse(w http.ResponseWriter, r *http.Request) {
+	nuevoEquipo := Equipo{}
+	err := json.NewDecoder(r.Body).Decode(&nuevoEquipo)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	c, err := r.Cookie(param[1])
+	if err != nil {
+		handlerSesionCerrada(w, r)
+		return
+	}
+	sesion, ok := dbSesiones[c.Value]
+	if !ok {
+		handlerSesionCerrada(w, r)
+		return
+	}
+	usuario, ok := dbUsuarios[sesion.Sesion]
+	if !ok {
+		handlerSesionCerrada(w, r)
+		return
+	}
+	nuevoEquipo.ID_Representante = usuario.IDCuenta
+	err = agregarEquipo(nuevoEquipo)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	respuesta, err := json.Marshal("{}")
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respuesta)
+}
+
 func handlerRespuesta(w http.ResponseWriter, r *http.Request) {
 	nuevaRespuesta := Intento{}
 	err := json.NewDecoder(r.Body).Decode(&nuevaRespuesta)
@@ -610,7 +664,6 @@ func handlerRespuesta(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(respuesta)
-
 	}
 	resultado, err := revisarRespuesta(nuevaRespuesta)
 	if err != nil {
@@ -629,6 +682,53 @@ func handlerRespuesta(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(respuesta)
+}
+func agregarEquipo(equipo Equipo) error {
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	tab1, err := db1.Query("INSERT INTO equipo (ID_QUEST, ID_REPRESENTANTE, NOMBRE_EQUIPO, RUT_RESPONSABLE, NOMBRE_RESPONSABLE) VALUES(?, ?, ?, ?, ?);", equipo.ID_Quest, equipo.ID_Representante, equipo.Nombre_Equipo, equipo.Rut_Respondable, equipo.Nombre_Respondable)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	tab1.Close()
+	tab, err := db1.Query("select LAST_INSERT_ID()")
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	defer tab.Close()
+	for tab.Next() {
+		err = tab.Scan(&equipo.ID_Equipo)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return err
+		}
+	}
+	for _, element := range equipo.Miembros_Equipo {
+
+		tab2, err := db1.Query("INSERT INTO miembro (ID_EQUIPO, RUT_MIEMBRO, NOMBRE_MIEMBRO) VALUES(?, ?, ?);", equipo.ID_Equipo, element.Rut_Miembro, element.Nombre_Miembro)
+		if err != nil {
+			db1.Rollback()
+			log.Println("Error: " + err.Error())
+			return err
+		}
+		tab2.Close()
+	}
+
+	err = db1.Commit()
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return err
+	}
+	return nil
 }
 
 func revisarRespuesta(respuesta Intento) (Intento, error) {
