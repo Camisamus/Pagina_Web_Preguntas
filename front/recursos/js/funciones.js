@@ -396,6 +396,7 @@ function crearMenu(data) {
 
 function armarPaginaQuest0(data) {
     let bodydiv = document.getElementById("contentdiv");
+    let divPremio = llebarDivPremio(data);
     let divDatos = llebarDivDatos(data);
     let divEquipos = llebarDivEquipos(data);
     let divpreguntas = llebarDivpreguntas(data);
@@ -406,9 +407,19 @@ function armarPaginaQuest0(data) {
     reloj.appendChild(timer)
     divEquipos.appendChild(reloj)
     bodydiv.appendChild(divDatos);
+    bodydiv.appendChild(divPremio);
     bodydiv.appendChild(divEquipos);
     cambioEquipo()
     bodydiv.appendChild(divpreguntas);
+}
+
+function llebarDivPremio(data) {
+    let divDatos = document.createElement("div");
+    let titulo = document.createElement("h3");
+    text = document.createTextNode(data.Quest.Premio);
+    titulo.appendChild(text);
+    divDatos.appendChild(titulo);
+    return divDatos
 }
 
 function llebarDivDatos(data) {
@@ -436,15 +447,20 @@ function llebarDivEquipos(data) {
     for (i = 0; i < data.Equipo.length; i++) {
         opcion = document.createElement("option");
         opcion.setAttribute("value", data.Equipo[i].IDEquipo);
-        opcion.appendChild(document.createTextNode(data.Equipo[i].NombreRespondable + " - " + data.Equipo[i].RutRespondable));
+        opcion.appendChild(document.createTextNode(data.Equipo[i].NombreRespondable));
+        opcion.appendChild(document.createElement("br"));
+        opcion.appendChild(document.createTextNode(data.Equipo[i].RutRespondable));
         inputEquipos.appendChild(opcion)
         divEquipo0 = document.createElement("div");
         divEquipo0.setAttribute("id", "divEquipo" + data.Equipo[i].IDEquipo);
         divEquipo0.setAttribute("Class", "divEquipo");
         divEquipo0.setAttribute("Style", "display: none")
         divEquipo1 = document.createElement("div");
+        divEquipo1.setAttribute("Class", "divEquipo1");
         divEquipo2 = document.createElement("div");
+        divEquipo2.setAttribute("Class", "divEquipo2");
         divEquipo3 = document.createElement("div");
+        divEquipo3.setAttribute("Class", "divEquipo3");
         text1 = document.createTextNode(data.Equipo[i].NombreEquipo);
         divEquipo1.appendChild(text1);
         text2 = document.createTextNode(data.Equipo[i].NombreRespondable + " ");
@@ -454,6 +470,7 @@ function llebarDivEquipos(data) {
         for (j = 0; j < data.Equipo[i].Miembros_Equipo.length; j++) {
             text4 = document.createTextNode(data.Equipo[i].Miembros_Equipo[j].NombreMiembro + " ");
             divEquipo3.appendChild(text4);
+            divEquipo3.appendChild(document.createElement("br"));
             text5 = document.createTextNode(data.Equipo[i].Miembros_Equipo[j].RutMiembro);
             divEquipo3.appendChild(text5);
             divEquipo3.appendChild(document.createElement("br"));
@@ -494,10 +511,10 @@ function llebarDivpreguntas(data) {
     let divpreguntas = document.createElement("div");
     for (i = 0; i < data.Quest.Preguntas.length; i++) {
         divPregunta0 = document.createElement("div");
-        divPregunta0.setAttribute("class", "inputter");
+        divPregunta0.setAttribute("class", "inputter divPregunta");
         divPregunta0.appendChild(document.createTextNode("Pregunta " + (i + 1) + ": " + data.Quest.Preguntas[i].Pregunta))
         divPregunta1 = document.createElement("div");
-        divPregunta1.setAttribute("class", "inputter");
+        divPregunta1.setAttribute("class", "inputter divPregunta");
         divPregunta1.appendChild(document.createTextNode("Pistas : " + data.Quest.Preguntas[i].Pista))
         divPregunta2 = document.createElement("div");
         divPregunta2.setAttribute("class", "inputter");
@@ -538,7 +555,7 @@ async function inscribir() {
     fondomodal.setAttribute("onclick", "cerrarModal()");
     divInscribirse0 = document.createElement("div");
     divInscribirse0.setAttribute("id", "divinscribirse0");
-    divInscribirse0.setAttribute("style", "    background-color: rgba(255, 255, 255, 1);    margin: 15% auto;    border-radius: 10px;    padding: 15px;    border: 1px solid #888;    width: 80%;    min-width: 400px;    max-width: 600px;    color: black;");
+    divInscribirse0.setAttribute("style", "    background-color:  antiquewhite;    margin: 15% auto;    border-radius: 10px;    padding: 15px;    border: 1px solid #888;    width: 80%;    min-width: 400px;    max-width: 600px;    color: black;");
     divInscribirse0.setAttribute("onclick", "event.stopPropagation();");
     divInscribirse1 = document.createElement("div");
     divInscribirse1.setAttribute("class", "inputter");
