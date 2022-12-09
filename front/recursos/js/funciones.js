@@ -304,8 +304,9 @@ function sInscribirEquipo() {
             },
             data: armarEquipo(),
             method: 'POST',
-            success: function() {
-                window.location.reload()
+            success: function(data) {
+                alert(data);
+                window.location.reload();
             },
             error: function() {
                 window.location.href = "../paginas/error.html"
@@ -485,6 +486,7 @@ function llebarDivEquipos(data) {
 
 function armarEquipo() {
     aux = {
+        IDEquipo: $("#inputclave").val(),
         IDQuest: urlParams.get('Quest'),
         NombreEquipo: $("#inputNombreEquipo").val(),
         RutRespondable: $("#inputRutResponsable").val(),
@@ -564,6 +566,9 @@ async function inscribir() {
     nombreEquipo = document.createElement("input");
     nombreEquipo.setAttribute("id", "inputNombreEquipo")
     nombreEquipo.setAttribute("style", "margin: 10px");
+    clave = document.createElement("input");
+    clave.setAttribute("id", "inputclave")
+    clave.setAttribute("style", "margin: 10px");
     inputRut = document.createElement("input");
     inputRut.setAttribute("id", "inputRutResponsable")
     inputRut.setAttribute("style", "margin: 10px");
@@ -583,6 +588,9 @@ async function inscribir() {
     divInscribirse0.appendChild(divInscribirse1);
     divInscribirse1.appendChild(document.createTextNode("Nombre Equipo"));
     divInscribirse1.appendChild(nombreEquipo);
+    divInscribirse1.appendChild(document.createElement("br"));
+    divInscribirse1.appendChild(document.createTextNode("Codigo Inscrpcion"));
+    divInscribirse1.appendChild(clave);
     divInscribirse1.appendChild(document.createElement("br"));
     divInscribirse1.appendChild(document.createTextNode("Rut Responsable"));
     divInscribirse1.appendChild(inputRut);

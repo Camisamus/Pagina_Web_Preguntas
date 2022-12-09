@@ -1,14 +1,8 @@
 package main
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"database/sql"
 	"encoding/json"
-	"errors"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -25,12 +19,12 @@ import (
 var bd *sql.DB
 var param []string
 var questActivas []QuestMenu
+var dbClavesInscrion = map[string]bool{}            //
 var dbSesiones = map[string]Sesion{}                // session ID, user ID
 var dbUsuarios = map[string]Cuenta{}                //
 var dbIntentos = map[string]Intento{}               //
 var dbClavesEnproceso = map[string]CuentaEnEspera{} //
 var dbQuestCeradas = map[string]bool{}
-var claveDeEncriptado *[32]byte
 
 //QuestMenu, objeto para array que lista las quest activas
 type QuestMenu struct {
@@ -133,8 +127,8 @@ type Respuestas struct {
 
 func init() {
 	actualizaparam()
-	claveDeEncriptado = crearclave()
 	conectadb()
+	go cargarClavesActivas()
 	go cargarQestActivas()
 	go cerrarSesiones()
 	go clavesNoRecuperadas()
@@ -180,6 +174,45 @@ func cargarQestActivas() {
 			aux1 = append(aux1, aux2)
 		}
 		questActivas = aux1
+		time.Sleep(time.Hour * 12)
+	}
+}
+
+func cargarClavesActivas() {
+	for {
+		log.Println("Cargando Codigos")
+		tab, err := bd.Query("select i.CODIGO  from inscripciones i where i.EQUIPO = 0")
+		if err != nil {
+			log.Println("Errores al marcar Solicitudes: " + err.Error())
+			return
+		}
+		defer tab.Close()
+		aux1 := 0
+		for tab.Next() {
+			aux2 := ""
+			err = tab.Scan(&aux2)
+			if err != nil {
+				log.Println("Error: " + err.Error())
+				return
+			}
+			aux1++
+			dbClavesInscrion[aux2] = true
+		}
+		db1, err := bd.Begin()
+		if err != nil {
+			log.Println("Error: " + err.Error())
+			return
+		}
+		for i := aux1; i < 50; i++ {
+			sID := uuid.NewV4()
+			_, err := db1.Exec("INSERT INTO inscripciones (CODIGO, EQUIPO) VALUES( ? , 0);", sID.String())
+			if err != nil {
+				log.Println("Errores al marcar Solicitudes: " + err.Error())
+				return
+			}
+			dbClavesInscrion[sID.String()] = true
+		}
+		db1.Commit()
 		time.Sleep(time.Hour * 12)
 	}
 }
@@ -347,7 +380,7 @@ func handlerIniciarSesion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resultado.Estado == "True" {
-		sID, _ := uuid.NewV4()
+		sID := uuid.NewV4()
 		c := &http.Cookie{
 			Name:     param[1],
 			Value:    sID.String(),
@@ -624,14 +657,42 @@ func handlerInscribirse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nuevoEquipo.ID_Representante = usuario.IDCuenta
-	err = agregarEquipo(nuevoEquipo)
+	ok, err = ValidarClave(nuevoEquipo.ID_Equipo)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(nil)
 		return
 	}
-	respuesta, err := json.Marshal("{}")
+	if !ok {
+
+		respuesta, err := json.Marshal("Clave Invalida")
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(nil)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respuesta)
+		return
+	}
+	id, err := agregarEquipo(nuevoEquipo)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	err = usarClave(nuevoEquipo.ID_Equipo, id)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+		return
+	}
+	respuesta, err := json.Marshal("Equipo Inscrito")
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -683,24 +744,57 @@ func handlerRespuesta(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write(respuesta)
 }
-func agregarEquipo(equipo Equipo) error {
+func ValidarClave(clave string) (bool, error) {
+	ok := dbClavesInscrion[clave]
+	if !ok {
+		return false, nil
+	}
+	dbClavesInscrion[clave] = false
+	return ok, nil
+}
+func usarClave(clave string, equipo string) error {
 	db1, err := bd.Begin()
 	if err != nil {
 		log.Println("Error: " + err.Error())
 		return err
 	}
-	tab1, err := db1.Query("INSERT INTO equipo (ID_QUEST, ID_REPRESENTANTE, NOMBRE_EQUIPO, RUT_RESPONSABLE, NOMBRE_RESPONSABLE) VALUES(?, ?, ?, ?, ?);", equipo.ID_Quest, equipo.ID_Representante, equipo.Nombre_Equipo, equipo.Rut_Respondable, equipo.Nombre_Respondable)
+	_, err = db1.Query("UPDATE inscripciones set EQUIPO= ? where  CODIGO = ?;", equipo, clave)
 	if err != nil {
 		db1.Rollback()
 		log.Println("Error: " + err.Error())
 		return err
+	}
+
+	sID := uuid.NewV4()
+	_, err = db1.Exec("INSERT INTO inscripciones (CODIGO, EQUIPO) VALUES( ? , 0);", sID.String())
+	if err != nil {
+		log.Println("Errores al marcar Solicitudes: " + err.Error())
+		return err
+	}
+
+	db1.Commit()
+	dbClavesInscrion[sID.String()] = true
+	delete(dbClavesInscrion, clave)
+	return nil
+}
+func agregarEquipo(equipo Equipo) (string, error) {
+	db1, err := bd.Begin()
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		return "", err
+	}
+	tab1, err := db1.Query("INSERT INTO equipo (ID_QUEST, ID_REPRESENTANTE, NOMBRE_EQUIPO, RUT_RESPONSABLE, NOMBRE_RESPONSABLE) VALUES(?, ?, ?, ?, ?);", equipo.ID_Quest, equipo.ID_Representante, equipo.Nombre_Equipo, equipo.Rut_Respondable, equipo.Nombre_Respondable)
+	if err != nil {
+		db1.Rollback()
+		log.Println("Error: " + err.Error())
+		return "", err
 	}
 	tab1.Close()
 	tab, err := db1.Query("select LAST_INSERT_ID()")
 	if err != nil {
 		db1.Rollback()
 		log.Println("Error: " + err.Error())
-		return err
+		return "", err
 	}
 	defer tab.Close()
 	for tab.Next() {
@@ -708,7 +802,7 @@ func agregarEquipo(equipo Equipo) error {
 		if err != nil {
 			db1.Rollback()
 			log.Println("Error: " + err.Error())
-			return err
+			return "", err
 		}
 	}
 	for _, element := range equipo.Miembros_Equipo {
@@ -717,7 +811,7 @@ func agregarEquipo(equipo Equipo) error {
 		if err != nil {
 			db1.Rollback()
 			log.Println("Error: " + err.Error())
-			return err
+			return "", err
 		}
 		tab2.Close()
 	}
@@ -726,9 +820,9 @@ func agregarEquipo(equipo Equipo) error {
 	if err != nil {
 		db1.Rollback()
 		log.Println("Error: " + err.Error())
-		return err
+		return "", err
 	}
-	return nil
+	return equipo.ID_Equipo, nil
 }
 
 func revisarRespuesta(respuesta Intento) (Intento, error) {
@@ -937,7 +1031,7 @@ func recuperarClave1(cuenta Cuenta) error {
 		return err
 	}
 	if encontrado {
-		sID, _ := uuid.NewV4()
+		sID := uuid.NewV4()
 		dbClavesEnproceso[sID.String()] = CuentaEnEspera{
 			Cuenta:    cuentaingresada,
 			TimeStamp: time.Now(),
@@ -1141,67 +1235,6 @@ func limpiaRespueestas(preguntas []Pregunta) []Pregunta {
 		preguntasn = append(preguntasn, element)
 	}
 	return preguntasn
-}
-
-//_____________________________funciones crypto------------------
-
-func crearclave() *[32]byte { //*bytes.Buffer { //
-	var key []byte
-	w := bytes.NewBuffer(key)
-	for i := 0; i < 32; i++ {
-		w.WriteByte(param[9][0])
-	}
-	nk := [32]byte{}
-	newkey := w.Bytes()
-	copy(nk[:], newkey)
-	return &nk
-}
-
-func encrypt(plaintext []byte, key *[32]byte) (ciphertext []byte, err error) {
-	block, err := aes.NewCipher(key[:])
-	if err != nil {
-		log.Println("Errores al encryptar: " + err.Error())
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		log.Println("Errores al encryptar: " + err.Error())
-		return nil, err
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	_, err = io.ReadFull(rand.Reader, nonce)
-	if err != nil {
-		log.Println("Errores al encryptar: " + err.Error())
-		return nil, err
-	}
-
-	return gcm.Seal(nonce, nonce, plaintext, nil), nil
-}
-
-func decrypt(ciphertext []byte, key *[32]byte) (plaintext []byte, err error) {
-	block, err := aes.NewCipher(key[:])
-	if err != nil {
-		log.Println("Errores al desencryptar: " + err.Error())
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		log.Println("Errores al desencryptar: " + err.Error())
-		return nil, err
-	}
-
-	if len(ciphertext) < gcm.NonceSize() {
-		return nil, errors.New("malformed ciphertext")
-	}
-
-	return gcm.Open(nil,
-		ciphertext[:gcm.NonceSize()],
-		ciphertext[gcm.NonceSize():],
-		nil,
-	)
 }
 
 func enviarmail(contenido string, destin string, motivo string) error {
