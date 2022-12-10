@@ -365,7 +365,7 @@ function sRespuesta() {
         });
     };
 }
-
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 function crearMenu(data) {
     let lista = document.getElementById("navbardiv");
     let cerrarSesion = document.createElement("input");
